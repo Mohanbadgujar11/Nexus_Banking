@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
-
-const API_BASE_URL = 'http://localhost:8080';
+import { API_BASE_URL } from '../config.js';
 
 function UserProfileView({ user, onUpdateUser, onLogout }) {
   const [activeTab, setActiveTab] = useState('account'); // 'account' | 'password' | 'contact' | 'report' | 'rating' | 'guidelines' | 'deactivation'

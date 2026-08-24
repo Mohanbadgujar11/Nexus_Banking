@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-
-const API_BASE_URL = 'http://localhost:8080';
+import { API_BASE_URL } from '../config.js';
 
 function SecurityView({ user }) {
   const [twoFactorEnabled, setTwoFactorEnabled] = useState(() => {

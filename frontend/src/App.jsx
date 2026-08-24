@@ -12,8 +12,7 @@ import SecurityView from './components/SecurityView.jsx';
 import AnalyticsView from './components/AnalyticsView.jsx';
 import AdminDashboard from './components/AdminDashboard.jsx';
 import UserProfileView from './components/UserProfileView.jsx';
-
-const API_BASE_URL = 'http://localhost:8080';
+import { API_BASE_URL } from './config.js';
 
 function App() {
   const [currentUser, setCurrentUser] = useState(() => {

@@ -83,7 +83,7 @@ function Register({ onNavigateToLogin, onRegisterSuccess }) {
       console.error('Registration error:', err);
       setFeedback({
         type: 'error',
-        message: 'Could not connect to backend server. Ensure API is running at http://localhost:8080',
+        message: 'Unable to reach account onboarding service. Please verify your connection.',
         errors: {},
       });
     } finally {

@@ -13,7 +13,7 @@ function Footer({ onNavigate }) {
               <span className="footer-brand-name">NEXUS FEDERAL RESERVE TRUST N.A.</span>
             </div>
             <p className="footer-tagline">
-              Institutional core banking infrastructure and private wealth custody. Backed by real-time double-entry cryptographic ledgers, Spring Boot 4 micro-engines, and multi-region ACID compliance.
+              Institutional core banking infrastructure and private wealth custody. Backed by real-time double-entry cryptographic ledgers, distributed settlement protocols, and multi-region statutory compliance.
             </p>
           </div>
 
@@ -57,20 +57,20 @@ function Footer({ onNavigate }) {
           </div>
 
           <div className="footer-col">
-            <h4>Technology & Architecture</h4>
+            <h4>Institutional Infrastructure</h4>
             <ul>
-              <li><a href="#core-engine">Spring Boot 4 High-Throughput Engine</a></li>
-              <li><a href="#acid">ACID MySQL Transaction Boundaries</a></li>
-              <li><a href="#api">REST API Core Specifications</a></li>
-              <li><a href="#docker">Docker Compose Cloud Deployment</a></li>
-              <li><a href="#audit-log">Double-Entry Cryptographic Proof</a></li>
+              <li><a href="#core-engine">High-Throughput Settlement Engine</a></li>
+              <li><a href="#acid">Atomic Transaction Settlement Protocol</a></li>
+              <li><a href="#api">Open Banking Interconnect Specifications</a></li>
+              <li><a href="#cloud">Distributed Sovereign Cloud Nodes</a></li>
+              <li><a href="#audit-log">Immutable Double-Entry Ledger Proof</a></li>
             </ul>
           </div>
 
           <div className="footer-col">
             <h4>Security & Compliance</h4>
             <ul>
-              <li><button type="button" className="footer-link-btn" onClick={() => onNavigate && onNavigate('security')}>BCrypt Password Cryptography</button></li>
+              <li><button type="button" className="footer-link-btn" onClick={() => onNavigate && onNavigate('security')}>Hardware Key Cryptography</button></li>
               <li><a href="#tls">256-Bit TLS In-Transit Encryption</a></li>
               <li><a href="#soc2">SOC-2 Type II Certified Audits</a></li>
               <li><a href="#iso">ISO/IEC 27001 Information Security</a></li>
@@ -104,9 +104,9 @@ function Footer({ onNavigate }) {
           </div>
           <div className="security-badges">
             <span className="sec-tag">🔒 256-Bit TLS</span>
-            <span className="sec-tag">🛡 BCrypt Hash</span>
+            <span className="sec-tag">🛡 HSM Secured</span>
             <span className="sec-tag">🏛 FDIC Insured</span>
-            <span className="sec-tag">⚡ Spring Core Engine</span>
+            <span className="sec-tag">⚡ Certified Core Ledger</span>
           </div>
         </div>
       </div>

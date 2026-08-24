@@ -171,7 +171,7 @@ function Dashboard({ user, balance, transactions, onExecuteTransfer, onNavigate,
               <h3>Instant Settlement Terminal</h3>
               <p>Transfer funds to any Nexus Account Number or Username</p>
             </div>
-            <span className="zero-fee-pill">Real-Time Core API</span>
+            <span className="zero-fee-pill">Real-Time Clearing</span>
           </div>
 
           {transferMessage && (
@@ -256,7 +256,7 @@ function Dashboard({ user, balance, transactions, onExecuteTransfer, onNavigate,
         <div className="ledger-header-row">
           <div>
             <h3>Real-Time Account Ledger</h3>
-            <p>Transactions committed to the MySQL ACID database</p>
+            <p>Live transactions committed to the double-entry reserve ledger</p>
           </div>
 
           <div className="tx-filter-group">

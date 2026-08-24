@@ -339,7 +339,7 @@ function TransfersView({ user, balance, onExecuteTransfer, onOpenLogin }) {
               <div className="step-num">3</div>
               <div className="step-info">
                 <h4>Core Ledger Committed</h4>
-                <p>Double-entry debit/credit ledger commit on MySQL.</p>
+                <p>Atomic double-entry debit/credit commit across reserves.</p>
               </div>
             </div>
 

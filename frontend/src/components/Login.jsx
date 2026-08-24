@@ -66,7 +66,7 @@ function Login({ onNavigateToRegister, onLoginSuccess, initialIdentifier = '', r
       console.error('Login error:', err);
       setFeedback({
         type: 'error',
-        message: 'Could not connect to backend server. Ensure API is running at http://localhost:8080',
+        message: 'Unable to reach secure authentication service. Please verify your connection.',
       });
     } finally {
       setLoading(false);

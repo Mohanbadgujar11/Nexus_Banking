@@ -1,33 +1,68 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 
-function SecurityView() {
-  const [twoFactorEnabled, setTwoFactorEnabled] = useState(true);
-  const [biometricEnabled, setBiometricEnabled] = useState(true);
-  const [sessions, setSessions] = useState([
-    { id: 1, device: 'Chrome on macOS (Current)', ip: '192.168.1.42', location: 'New York, USA', status: 'Active Now' },
-    { id: 2, device: 'Nexus Mobile iOS App', ip: '172.56.21.9', location: 'New York, USA', status: 'Active 2h ago' },
-  ]);
+const API_BASE_URL = 'http://localhost:8080';
+
+function SecurityView({ user }) {
+  const [twoFactorEnabled, setTwoFactorEnabled] = useState(() => {
+    return localStorage.getItem('nexus_2fa_enabled') === 'true';
+  });
+  const [biometricEnabled, setBiometricEnabled] = useState(() => {
+    return localStorage.getItem('nexus_biometric_enabled') !== 'false';
+  });
+  const [auditLogs, setAuditLogs] = useState([]);
+  const [loadingLogs, setLoadingLogs] = useState(false);
   const [revokeMsg, setRevokeMsg] = useState('');
+
+  const [sessions, setSessions] = useState([
+    { id: 1, device: 'Chrome on Windows 11 (Current Session)', ip: '127.0.0.1', location: 'New York, USA', status: 'Active Now' },
+    { id: 2, device: 'Nexus Mobile iOS Terminal', ip: '172.56.21.9', location: 'New York, USA', status: 'Active 2h ago' },
+  ]);
+
+  const toggle2FA = () => {
+    const next = !twoFactorEnabled;
+    setTwoFactorEnabled(next);
+    localStorage.setItem('nexus_2fa_enabled', String(next));
+  };
+
+  const toggleBiometric = () => {
+    const next = !biometricEnabled;
+    setBiometricEnabled(next);
+    localStorage.setItem('nexus_biometric_enabled', String(next));
+  };
 
   const handleRevokeSession = (id) => {
     setSessions(sessions.filter((s) => s.id !== id));
-    setRevokeMsg('Session revoked. Invalidation token dispatched to Spring Security filter.');
+    setRevokeMsg('Session token revoked & invalidated across all clearing gateways.');
     setTimeout(() => setRevokeMsg(''), 3500);
   };
 
-  const auditLogs = [
-    { id: 'LOG-99201', action: 'USER_LOGIN_BCRYPT_VERIFIED', hash: '0x8f19...d2a1', status: 'SUCCESS', time: 'Today, 10:14 PM' },
-    { id: 'LOG-99200', action: 'LEDGER_DOUBLE_ENTRY_COMMIT', hash: '0x3c77...99e4', status: 'COMMITTED', time: 'Today, 09:30 AM' },
-    { id: 'LOG-99199', action: 'API_KEY_ROTATION_DISPATCH', hash: '0x12bb...aa07', status: 'VERIFIED', time: 'Yesterday, 04:15 PM' },
-  ];
+  const fetchAuditLogs = useCallback(async () => {
+    if (!user?.id) return;
+    setLoadingLogs(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/audit-logs/user/${user.id}`);
+      const data = await res.json();
+      if (res.ok && data?.success && Array.isArray(data.data)) {
+        setAuditLogs(data.data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch audit logs:', err);
+    } finally {
+      setLoadingLogs(false);
+    }
+  }, [user?.id]);
+
+  useEffect(() => {
+    fetchAuditLogs();
+  }, [fetchAuditLogs]);
 
   return (
     <div className="view-container">
       <div className="view-header">
-        <div className="view-badge">Cryptographic Security</div>
-        <h1 className="view-title">Security & Audit Ledger</h1>
+        <div className="view-badge">Cryptographic Security & Audit</div>
+        <h1 className="view-title">Security Telemetry & Core Audit</h1>
         <p className="view-subtitle">
-          Real-time security telemetry, active cryptographic session management, and immutable double-entry ledger audits.
+          Real-time security telemetry, active cryptographic session management, and immutable double-entry ledger audit events.
         </p>
       </div>
 
@@ -46,7 +81,9 @@ function SecurityView() {
               <h3>System Security Status: 100% Protected</h3>
               <span className="health-tag-active">SOC-2 Type II Certified</span>
             </div>
-            <p>Your account is guarded by BCrypt password hashing, stateless Spring Security tokens, and 256-bit TLS encryption.</p>
+            <p>
+              Your account is guarded by military-grade cryptographic hashing, stateless token verification, and 256-bit TLS encryption.
+            </p>
           </div>
         </div>
         <div className="health-meter">
@@ -72,7 +109,7 @@ function SecurityView() {
               <button
                 type="button"
                 className={`toggle-switch-btn ${twoFactorEnabled ? 'active-gold' : ''}`}
-                onClick={() => setTwoFactorEnabled(!twoFactorEnabled)}
+                onClick={toggle2FA}
               >
                 {twoFactorEnabled ? 'ENABLED' : 'DISABLED'}
               </button>
@@ -86,7 +123,7 @@ function SecurityView() {
               <button
                 type="button"
                 className={`toggle-switch-btn ${biometricEnabled ? 'active-gold' : ''}`}
-                onClick={() => setBiometricEnabled(!biometricEnabled)}
+                onClick={toggleBiometric}
               >
                 {biometricEnabled ? 'ENABLED' : 'DISABLED'}
               </button>
@@ -127,35 +164,48 @@ function SecurityView() {
       <div className="lux-card audit-ledger-card">
         <div className="lux-card-header">
           <div className="header-with-tag">
-            <h3>Immutable Double-Entry Audit Ledger</h3>
-            <span className="audit-proof-tag">🔒 Sha-256 Hash Verified</span>
+            <h3>Institutional Core Banking Audit Ledger</h3>
+            <span className="audit-proof-tag">🔒 Sha-256 Fingerprint Verified</span>
           </div>
-          <p>Every transaction and security event is committed with a cryptographic verification hash in the MySQL core database.</p>
+          <p>Every transaction, card freeze, registration, and administrative action is immutably hashed and committed to the core reserve ledger.</p>
         </div>
 
         <div className="audit-table-wrap">
-          <table className="audit-table">
-            <thead>
-              <tr>
-                <th>Event ID</th>
-                <th>Operation</th>
-                <th>Ledger Hash</th>
-                <th>Status</th>
-                <th>Timestamp</th>
-              </tr>
-            </thead>
-            <tbody>
-              {auditLogs.map((log) => (
-                <tr key={log.id}>
-                  <td><code>{log.id}</code></td>
-                  <td><strong>{log.action}</strong></td>
-                  <td><code className="gold-text">{log.hash}</code></td>
-                  <td><span className="badge-committed">{log.status}</span></td>
-                  <td>{log.time}</td>
+          {loadingLogs ? (
+            <div style={{ padding: '40px', textAlign: 'center' }}>
+              <div className="spinner" style={{ margin: '0 auto 12px' }}></div>
+              <p style={{ color: 'var(--text-muted)' }}>Retrieving live cryptographic audit trails...</p>
+            </div>
+          ) : auditLogs.length === 0 ? (
+            <div style={{ padding: '30px', textAlign: 'center', color: 'var(--text-muted)' }}>
+              No audit records registered for this account yet.
+            </div>
+          ) : (
+            <table className="audit-table">
+              <thead>
+                <tr>
+                  <th>Event ID</th>
+                  <th>Operation</th>
+                  <th>Target Resource</th>
+                  <th>SHA-256 Fingerprint</th>
+                  <th>IP Address</th>
+                  <th>Timestamp</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {auditLogs.map((log) => (
+                  <tr key={log.id}>
+                    <td><code>AUD-{log.id}</code></td>
+                    <td><strong>{log.action}</strong></td>
+                    <td><span className="user-role-tag">{log.resourceType} #{log.resourceId}</span></td>
+                    <td><code className="gold-text" title={log.sha256Fingerprint}>{log.sha256Fingerprint?.substring(0, 20)}...</code></td>
+                    <td><code>{log.ipAddress}</code></td>
+                    <td>{new Date(log.createdAt).toLocaleString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
       </div>
     </div>
@@ -163,4 +213,3 @@ function SecurityView() {
 }
 
 export default SecurityView;
-

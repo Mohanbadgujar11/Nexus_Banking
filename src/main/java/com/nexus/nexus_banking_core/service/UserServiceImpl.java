@@ -9,6 +9,8 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.nexus.nexus_banking_core.dto.ChangePasswordRequest;
+import com.nexus.nexus_banking_core.dto.DeactivationRequest;
 import com.nexus.nexus_banking_core.dto.UserLoginRequest;
 import com.nexus.nexus_banking_core.dto.UserRegisterRequest;
 import com.nexus.nexus_banking_core.dto.UserResponse;
@@ -340,6 +342,65 @@ public class UserServiceImpl implements UserService {
 
         Account primaryAccount = accountRepository.findPrimaryCheckingAccountByUserId(user.getId()).orElse(null);
         return buildUserResponse(updated, profile, address, primaryAccount);
+    }
+
+    @Override
+    @Transactional
+    public void changePassword(Long id, ChangePasswordRequest request) {
+        User user = userRepository.findById(id)
+            .orElseThrow(() -> new InvalidCredentialsException("User with ID '" + id + "' was not found"));
+
+        if (!passwordEncoder.matches(request.getCurrentPassword(), user.getPassword())) {
+            throw new InvalidCredentialsException("Current password does not match our records");
+        }
+
+        user.setPassword(passwordEncoder.encode(request.getNewPassword()));
+        userRepository.save(user);
+
+        // Audit Log
+        AuditLog auditLog = AuditLog.builder()
+            .actorUser(user)
+            .action("PASSWORD_CHANGED")
+            .resourceType("USERS")
+            .resourceId(String.valueOf(user.getId()))
+            .ipAddress("127.0.0.1")
+            .sha256Fingerprint("SHA256-PWD-" + user.getId() + "-" + System.currentTimeMillis())
+            .build();
+        auditLogRepository.save(auditLog);
+
+        log.info("Password changed successfully for user ID {}", id);
+    }
+
+    @Override
+    @Transactional
+    public void submitDeactivationRequest(Long id, DeactivationRequest request) {
+        User user = userRepository.findById(id)
+            .orElseThrow(() -> new InvalidCredentialsException("User with ID '" + id + "' was not found"));
+
+        if (request.getPassword() != null && !request.getPassword().isBlank()) {
+            if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
+                throw new InvalidCredentialsException("Master password verification failed");
+            }
+        }
+
+        String action = "DEACTIVATION_REQUESTED_" + request.getDeactivationType();
+        if ("TEMPORARY_FREEZE".equalsIgnoreCase(request.getDeactivationType())) {
+            user.setStatus("FROZEN");
+            userRepository.save(user);
+        }
+
+        // Audit Log
+        AuditLog auditLog = AuditLog.builder()
+            .actorUser(user)
+            .action(action)
+            .resourceType("USERS")
+            .resourceId(String.valueOf(user.getId()))
+            .ipAddress("127.0.0.1")
+            .sha256Fingerprint("SHA256-DEACT-" + user.getId() + "-" + System.currentTimeMillis())
+            .build();
+        auditLogRepository.save(auditLog);
+
+        log.info("Deactivation request submitted for user ID {}: type={}, reason={}", id, request.getDeactivationType(), request.getReason());
     }
 
     @Override

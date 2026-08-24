@@ -26,17 +26,22 @@ public class TransactionController {
 
     private final TransactionService transactionService;
 
-    @PostMapping("/transfers")
+    @PostMapping({"/transfers", "/transactions/transfer"})
     public ResponseEntity<ApiResponse<TransactionResponse>> executeTransfer(@Valid @RequestBody TransferRequest request) {
         TransactionResponse response = transactionService.transferFunds(request);
         return ResponseEntity.status(HttpStatus.CREATED)
             .body(ApiResponse.success("Transfer executed and committed to core ledger successfully", response));
     }
 
-    @GetMapping("/transactions/account/{accountNumber}")
+    @GetMapping({"/transactions/account/{accountNumber}", "/accounts/{accountNumber}/transactions"})
     public ResponseEntity<ApiResponse<List<TransactionResponse>>> getAccountTransactions(@PathVariable String accountNumber) {
         List<TransactionResponse> transactions = transactionService.getTransactionsForAccount(accountNumber);
         return ResponseEntity.ok(ApiResponse.success("Transaction history retrieved successfully", transactions));
     }
-}
 
+    @GetMapping("/transactions")
+    public ResponseEntity<ApiResponse<List<TransactionResponse>>> getAllTransactions() {
+        List<TransactionResponse> transactions = transactionService.getAllTransactions();
+        return ResponseEntity.ok(ApiResponse.success("All transactions retrieved successfully", transactions));
+    }
+}

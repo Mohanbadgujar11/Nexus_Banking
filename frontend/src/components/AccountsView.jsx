@@ -190,7 +190,7 @@ function AccountsView({ user, balance }) {
         <div className="lux-card hub-card">
           <div className="lux-card-header">
             <h3>Automated Statements & Tax Reports</h3>
-            <p>Generate timestamped cryptographic statements certified by Nexus Core Ledger.</p>
+            <p>Generate timestamped certified statements issued by Nexus Reserve Trust.</p>
           </div>
           <div className="statement-actions">
             <button

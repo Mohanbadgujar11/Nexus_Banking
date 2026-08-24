@@ -30,7 +30,7 @@ function Header({ user, currentView, onNavigate, onOpenLogin, onOpenRegister, on
     <header className="sticky-header" ref={headerRef}>
       <div className="header-inner">
         {/* Brand / Logo */}
-        <div className="header-brand" onClick={() => handleNavClick('dashboard')}>
+        <div className="header-brand" onClick={() => user && handleNavClick('dashboard')}>
           <div className="brand-icon-box">
             <span className="brand-dot"></span>
             <span className="brand-initial">N</span>
@@ -41,206 +41,221 @@ function Header({ user, currentView, onNavigate, onOpenLogin, onOpenRegister, on
           </div>
         </div>
 
-        {/* Desktop Navigation with Hover & Click Persistent Dropdowns */}
-        <nav className="header-nav">
-          {/* Dashboard Home Button */}
-          <button
-            type="button"
-            className={`nav-link ${currentView === 'dashboard' ? 'active-nav' : ''}`}
-            onClick={() => handleNavClick('dashboard')}
-          >
-            Dashboard
-          </button>
-
-          {/* If Admin, show Admin Console button */}
-          {isAdmin && (
+        {/* Navigation only available when user is authenticated */}
+        {user ? (
+          <nav className="header-nav">
+            {/* Dashboard Home Button */}
             <button
               type="button"
-              className={`nav-link admin-nav-btn ${currentView === 'admin' ? 'active-nav' : ''}`}
-              onClick={() => handleNavClick('admin')}
+              className={`nav-link ${currentView === 'dashboard' ? 'active-nav' : ''}`}
+              onClick={() => handleNavClick('dashboard')}
             >
-              🛡 Admin Console
+              Dashboard
             </button>
-          )}
 
-          {/* Accounts & Cards Dropdown */}
-          <div
-            className={`nav-item has-dropdown ${openDropdown === 'accounts' ? 'is-open' : ''} ${['accounts', 'cards'].includes(currentView) ? 'active-parent' : ''}`}
-            onMouseEnter={() => setOpenDropdown('accounts')}
-            onMouseLeave={() => setOpenDropdown(null)}
-          >
-            <button
-              className="nav-link"
-              type="button"
-              onClick={() => toggleDropdown('accounts')}
+            {/* If Admin, show Admin Console button */}
+            {isAdmin && (
+              <button
+                type="button"
+                className={`nav-link admin-nav-btn ${currentView === 'admin' ? 'active-nav' : ''}`}
+                onClick={() => handleNavClick('admin')}
+              >
+                🛡 Admin Console
+              </button>
+            )}
+
+            {/* Accounts & Cards Dropdown */}
+            <div
+              className={`nav-item has-dropdown ${openDropdown === 'accounts' ? 'is-open' : ''} ${['accounts', 'cards'].includes(currentView) ? 'active-parent' : ''}`}
+              onMouseEnter={() => setOpenDropdown('accounts')}
+              onMouseLeave={() => setOpenDropdown(null)}
             >
-              <span>Accounts & Cards</span>
-              <span className="chevron-icon">▾</span>
-            </button>
-            <div className="dropdown-menu">
-              <div className="dropdown-grid">
-                <button
-                  type="button"
-                  className="dropdown-item-btn"
-                  onClick={() => handleNavClick('accounts')}
-                >
-                  <div className="item-icon">🏛</div>
-                  <div className="item-content">
-                    <span className="item-title">Accounts & Treasury</span>
-                    <span className="item-desc">Checking, routing numbers, and certified statement exports.</span>
-                  </div>
-                </button>
-                <button
-                  type="button"
-                  className="dropdown-item-btn"
-                  onClick={() => handleNavClick('cards')}
-                >
-                  <div className="item-icon">💎</div>
-                  <div className="item-content">
-                    <span className="item-title">Titanium & Virtual Cards</span>
-                    <span className="item-desc">3D interactive card studio, freeze locks, and virtual issuance.</span>
-                  </div>
-                </button>
+              <button
+                className="nav-link"
+                type="button"
+                onClick={() => toggleDropdown('accounts')}
+              >
+                <span>Accounts & Cards</span>
+                <span className="chevron-icon">▾</span>
+              </button>
+              <div className="dropdown-menu">
+                <div className="dropdown-grid">
+                  <button
+                    type="button"
+                    className="dropdown-item-btn"
+                    onClick={() => handleNavClick('accounts')}
+                  >
+                    <div className="item-icon">🏛</div>
+                    <div className="item-content">
+                      <span className="item-title">Accounts & Treasury</span>
+                      <span className="item-desc">Checking, routing numbers, and certified statement exports.</span>
+                    </div>
+                  </button>
+                  <button
+                    type="button"
+                    className="dropdown-item-btn"
+                    onClick={() => handleNavClick('cards')}
+                  >
+                    <div className="item-icon">💎</div>
+                    <div className="item-content">
+                      <span className="item-title">Titanium & Virtual Cards</span>
+                      <span className="item-desc">3D interactive card studio, freeze locks, and virtual issuance.</span>
+                    </div>
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
 
-          {/* Transfers Dropdown */}
-          <div
-            className={`nav-item has-dropdown ${openDropdown === 'transfers' ? 'is-open' : ''} ${currentView === 'transfers' ? 'active-parent' : ''}`}
-            onMouseEnter={() => setOpenDropdown('transfers')}
-            onMouseLeave={() => setOpenDropdown(null)}
-          >
-            <button
-              className="nav-link"
-              type="button"
-              onClick={() => handleNavClick('transfers')}
+            {/* Transfers Dropdown */}
+            <div
+              className={`nav-item has-dropdown ${openDropdown === 'transfers' ? 'is-open' : ''} ${currentView === 'transfers' ? 'active-parent' : ''}`}
+              onMouseEnter={() => setOpenDropdown('transfers')}
+              onMouseLeave={() => setOpenDropdown(null)}
             >
-              <span>Transfers</span>
-              <span className="chevron-icon">▾</span>
-            </button>
-            <div className="dropdown-menu">
-              <div className="dropdown-grid">
-                <button
-                  type="button"
-                  className="dropdown-item-btn"
-                  onClick={() => handleNavClick('transfers')}
-                >
-                  <div className="item-icon">⚡</div>
-                  <div className="item-content">
-                    <span className="item-title">Instant P2P & Wire Hub</span>
-                    <span className="item-desc">Zero-latency internal transfers and global SWIFT/SEPA wires.</span>
-                  </div>
-                </button>
+              <button
+                className="nav-link"
+                type="button"
+                onClick={() => handleNavClick('transfers')}
+              >
+                <span>Transfers</span>
+                <span className="chevron-icon">▾</span>
+              </button>
+              <div className="dropdown-menu">
+                <div className="dropdown-grid">
+                  <button
+                    type="button"
+                    className="dropdown-item-btn"
+                    onClick={() => handleNavClick('transfers')}
+                  >
+                    <div className="item-icon">⚡</div>
+                    <div className="item-content">
+                      <span className="item-title">Instant P2P & Wire Hub</span>
+                      <span className="item-desc">Zero-latency internal transfers and global SWIFT/SEPA wires.</span>
+                    </div>
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
 
-          {/* Wealth & Yield Dropdown */}
-          <div
-            className={`nav-item has-dropdown ${openDropdown === 'vault' ? 'is-open' : ''} ${currentView === 'vault' ? 'active-parent' : ''}`}
-            onMouseEnter={() => setOpenDropdown('vault')}
-            onMouseLeave={() => setOpenDropdown(null)}
-          >
-            <button
-              className="nav-link"
-              type="button"
-              onClick={() => handleNavClick('vault')}
+            {/* Wealth & Yield Dropdown */}
+            <div
+              className={`nav-item has-dropdown ${openDropdown === 'vault' ? 'is-open' : ''} ${currentView === 'vault' ? 'active-parent' : ''}`}
+              onMouseEnter={() => setOpenDropdown('vault')}
+              onMouseLeave={() => setOpenDropdown(null)}
             >
-              <span>Wealth & Vault</span>
-              <span className="chevron-icon">▾</span>
-            </button>
-            <div className="dropdown-menu">
-              <div className="dropdown-grid">
-                <button
-                  type="button"
-                  className="dropdown-item-btn"
-                  onClick={() => handleNavClick('vault')}
-                >
-                  <div className="item-icon">📈</div>
-                  <div className="item-content">
-                    <span className="item-title">4.85% APY High-Yield Vault</span>
-                    <span className="item-desc">Compound interest wealth simulator and goal-based pots.</span>
-                  </div>
-                </button>
+              <button
+                className="nav-link"
+                type="button"
+                onClick={() => handleNavClick('vault')}
+              >
+                <span>Wealth & Vault</span>
+                <span className="chevron-icon">▾</span>
+              </button>
+              <div className="dropdown-menu">
+                <div className="dropdown-grid">
+                  <button
+                    type="button"
+                    className="dropdown-item-btn"
+                    onClick={() => handleNavClick('vault')}
+                  >
+                    <div className="item-icon">📈</div>
+                    <div className="item-content">
+                      <span className="item-title">4.85% APY High-Yield Vault</span>
+                      <span className="item-desc">Compound interest wealth simulator and goal-based pots.</span>
+                    </div>
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
 
-          {/* Security & Audit Dropdown */}
-          <div
-            className={`nav-item has-dropdown ${openDropdown === 'security' ? 'is-open' : ''} ${currentView === 'security' ? 'active-parent' : ''}`}
-            onMouseEnter={() => setOpenDropdown('security')}
-            onMouseLeave={() => setOpenDropdown(null)}
-          >
-            <button
-              className="nav-link"
-              type="button"
-              onClick={() => handleNavClick('security')}
+            {/* Security & Audit Dropdown */}
+            <div
+              className={`nav-item has-dropdown ${openDropdown === 'security' ? 'is-open' : ''} ${currentView === 'security' ? 'active-parent' : ''}`}
+              onMouseEnter={() => setOpenDropdown('security')}
+              onMouseLeave={() => setOpenDropdown(null)}
             >
-              <span>Security</span>
-              <span className="chevron-icon">▾</span>
-            </button>
-            <div className="dropdown-menu">
-              <div className="dropdown-grid">
-                <button
-                  type="button"
-                  className="dropdown-item-btn"
-                  onClick={() => handleNavClick('security')}
-                >
-                  <div className="item-icon">🔒</div>
-                  <div className="item-content">
-                    <span className="item-title">Security & Audit Ledger</span>
-                    <span className="item-desc">BCrypt telemetry, active sessions, and double-entry proof.</span>
-                  </div>
-                </button>
+              <button
+                className="nav-link"
+                type="button"
+                onClick={() => handleNavClick('security')}
+              >
+                <span>Security</span>
+                <span className="chevron-icon">▾</span>
+              </button>
+              <div className="dropdown-menu">
+                <div className="dropdown-grid">
+                  <button
+                    type="button"
+                    className="dropdown-item-btn"
+                    onClick={() => handleNavClick('security')}
+                  >
+                    <div className="item-icon">🔒</div>
+                    <div className="item-content">
+                      <span className="item-title">Security & Audit Ledger</span>
+                      <span className="item-desc">BCrypt telemetry, active sessions, and double-entry proof.</span>
+                    </div>
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
 
-          {/* Analytics Dropdown */}
-          <div
-            className={`nav-item has-dropdown ${openDropdown === 'analytics' ? 'is-open' : ''} ${currentView === 'analytics' ? 'active-parent' : ''}`}
-            onMouseEnter={() => setOpenDropdown('analytics')}
-            onMouseLeave={() => setOpenDropdown(null)}
-          >
-            <button
-              className="nav-link"
-              type="button"
-              onClick={() => handleNavClick('analytics')}
+            {/* Analytics Dropdown */}
+            <div
+              className={`nav-item has-dropdown ${openDropdown === 'analytics' ? 'is-open' : ''} ${currentView === 'analytics' ? 'active-parent' : ''}`}
+              onMouseEnter={() => setOpenDropdown('analytics')}
+              onMouseLeave={() => setOpenDropdown(null)}
             >
-              <span>Analytics</span>
-              <span className="chevron-icon">▾</span>
-            </button>
-            <div className="dropdown-menu">
-              <div className="dropdown-grid">
-                <button
-                  type="button"
-                  className="dropdown-item-btn"
-                  onClick={() => handleNavClick('analytics')}
-                >
-                  <div className="item-icon">📊</div>
-                  <div className="item-content">
-                    <span className="item-title">Cash Flow Intelligence</span>
-                    <span className="item-desc">Spending velocity, monthly inflow trends, and expense metrics.</span>
-                  </div>
-                </button>
+              <button
+                className="nav-link"
+                type="button"
+                onClick={() => handleNavClick('analytics')}
+              >
+                <span>Analytics</span>
+                <span className="chevron-icon">▾</span>
+              </button>
+              <div className="dropdown-menu">
+                <div className="dropdown-grid">
+                  <button
+                    type="button"
+                    className="dropdown-item-btn"
+                    onClick={() => handleNavClick('analytics')}
+                  >
+                    <div className="item-icon">📊</div>
+                    <div className="item-content">
+                      <span className="item-title">Cash Flow Intelligence</span>
+                      <span className="item-desc">Spending velocity, monthly inflow trends, and expense metrics.</span>
+                    </div>
+                  </button>
+                </div>
               </div>
             </div>
+          </nav>
+        ) : (
+          <div className="gate-header-tag">
+            <span className="status-online-dot"></span>
+            <span>SECURE MEMBER ENCLAVE</span>
           </div>
-        </nav>
+        )}
 
         {/* Right Actions / Auth Controls */}
         <div className="header-actions">
           {user ? (
             <div className="user-auth-panel">
-              <div className="user-badge-pill">
+              <button
+                type="button"
+                className={`user-badge-pill-btn ${currentView === 'profile' ? 'active-profile-btn' : ''}`}
+                onClick={() => handleNavClick('profile')}
+                title="Open Profile, Password & Settings"
+              >
+                <div className="nav-avatar-circle">
+                  {(user.fullName || user.username || 'U').substring(0, 2).toUpperCase()}
+                </div>
                 <span className="status-online-dot"></span>
                 <span className="username-text">@{user.username}</span>
                 <span className="verified-tag">
                   {isAdmin ? 'ADMIN' : 'MEMBER'}
                 </span>
-              </div>
+              </button>
               <button type="button" className="btn-header-secondary logout-btn-header" onClick={onLogout}>
                 Sign Out
               </button>

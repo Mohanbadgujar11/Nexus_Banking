@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import './App.css';
 import Header from './components/Header.jsx';
 import Footer from './components/Footer.jsx';
+import AuthGate from './components/AuthGate.jsx';
 import Dashboard from './components/Dashboard.jsx';
 import AccountsView from './components/AccountsView.jsx';
 import TransfersView from './components/TransfersView.jsx';
@@ -10,18 +11,52 @@ import VaultView from './components/VaultView.jsx';
 import SecurityView from './components/SecurityView.jsx';
 import AnalyticsView from './components/AnalyticsView.jsx';
 import AdminDashboard from './components/AdminDashboard.jsx';
-import AuthModal from './components/AuthModal.jsx';
+import UserProfileView from './components/UserProfileView.jsx';
 
 const API_BASE_URL = 'http://localhost:8080';
 
 function App() {
-  const [currentUser, setCurrentUser] = useState(null);
-  const [currentView, setCurrentView] = useState('dashboard');
-  const [authModal, setAuthModal] = useState(null); // 'login' | 'register' | null
+  const [currentUser, setCurrentUser] = useState(() => {
+    try {
+      const saved = localStorage.getItem('nexus_current_user');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
 
-  // Real Database Financial State (Defaults to 0.00 and empty transaction list)
-  const [balance, setBalance] = useState(0.00);
+  const [currentView, setCurrentView] = useState('dashboard');
+  const [authGateMode, setAuthGateMode] = useState('login'); // 'login' | 'register'
+
+  // Real Database Financial State
+  const [balance, setBalance] = useState(() => {
+    return currentUser?.balance ? parseFloat(currentUser.balance) : 0.00;
+  });
   const [transactions, setTransactions] = useState([]);
+
+  // Top scroll utility ensuring view changes always scroll to the very top
+  const scrollToTop = () => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+  };
+
+  const handleNavigate = (view) => {
+    setCurrentView(view);
+    scrollToTop();
+  };
+
+  const handleSetAuthMode = (mode) => {
+    setAuthGateMode(mode);
+    scrollToTop();
+  };
+
+  const isLoggedIn = Boolean(currentUser);
+
+  // Scroll to top whenever the active view or auth mode changes
+  useEffect(() => {
+    scrollToTop();
+  }, [currentView, authGateMode, isLoggedIn]);
 
   const fetchUserTransactions = useCallback(async (accountNumber) => {
     if (!accountNumber) return;
@@ -41,9 +76,10 @@ function App() {
     try {
       const res = await fetch(`${API_BASE_URL}/api/users/account/${currentUser.accountNumber}`);
       const data = await res.json();
-      if (res.ok && data?.success) {
+      if (res.ok && data?.success && data.data) {
         const updated = data.data;
         setCurrentUser(updated);
+        localStorage.setItem('nexus_current_user', JSON.stringify(updated));
         setBalance(parseFloat(updated.balance) || 0.00);
       }
       fetchUserTransactions(currentUser.accountNumber);
@@ -52,30 +88,42 @@ function App() {
     }
   }, [currentUser?.accountNumber, fetchUserTransactions]);
 
+  // Sync on initial load and when user changes
   useEffect(() => {
     if (currentUser?.accountNumber) {
       setBalance(parseFloat(currentUser.balance) || 0.00);
-      fetchUserTransactions(currentUser.accountNumber);
+      localStorage.setItem('nexus_current_user', JSON.stringify(currentUser));
+      refreshUserData();
     } else {
       setBalance(0.00);
       setTransactions([]);
     }
-  }, [currentUser, fetchUserTransactions]);
+  }, [currentUser?.accountNumber, refreshUserData]);
 
   const handleLogout = () => {
+    localStorage.removeItem('nexus_current_user');
     setCurrentUser(null);
     setBalance(0.00);
     setTransactions([]);
     setCurrentView('dashboard');
+    setAuthGateMode('login');
+    scrollToTop();
   };
 
   const handleAuthSuccess = (user) => {
     setCurrentUser(user);
+    localStorage.setItem('nexus_current_user', JSON.stringify(user));
     setBalance(parseFloat(user.balance) || 0.00);
-    setAuthModal(null);
+    setCurrentView('dashboard');
+    scrollToTop();
     if (user.accountNumber) {
       fetchUserTransactions(user.accountNumber);
     }
+  };
+
+  const handleUpdateUserProfile = (updatedUser) => {
+    setCurrentUser(updatedUser);
+    localStorage.setItem('nexus_current_user', JSON.stringify(updatedUser));
   };
 
   const handleExecuteTransfer = async (amt, recipient, note) => {
@@ -84,7 +132,7 @@ function App() {
     }
 
     try {
-      const res = await fetch(`${API_BASE_URL}/api/transfers`, {
+      const res = await fetch(`${API_BASE_URL}/api/transactions/transfer`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -97,8 +145,8 @@ function App() {
 
       const data = await res.json();
       if (res.ok && data?.success) {
-        setBalance((prev) => prev - amt);
-        fetchUserTransactions(currentUser.accountNumber);
+        // Refresh full state from database
+        await refreshUserData();
         return { success: true, data: data.data };
       } else {
         return { success: false, message: data?.message || 'Transfer rejected by core ledger.' };
@@ -115,87 +163,101 @@ function App() {
       <Header
         user={currentUser}
         currentView={currentView}
-        onNavigate={setCurrentView}
-        onOpenLogin={() => setAuthModal('login')}
-        onOpenRegister={() => setAuthModal('register')}
+        onNavigate={handleNavigate}
+        onOpenLogin={() => handleSetAuthMode('login')}
+        onOpenRegister={() => handleSetAuthMode('register')}
         onLogout={handleLogout}
       />
 
       {/* Main Core View Area */}
       <main className="app-main-content">
-        {currentView === 'dashboard' && (
-          <Dashboard
-            user={currentUser}
-            balance={balance}
-            transactions={transactions}
-            onExecuteTransfer={handleExecuteTransfer}
-            onNavigate={setCurrentView}
-            onOpenLogin={() => setAuthModal('login')}
-            onOpenRegister={() => setAuthModal('register')}
+        {!currentUser ? (
+          /* AUTHENTICATION GATE: User must sign in or register before accessing the banking core */
+          <AuthGate
+            key={authGateMode}
+            initialMode={authGateMode}
+            onAuthSuccess={handleAuthSuccess}
           />
-        )}
+        ) : (
+          /* AUTHENTICATED BANKING ENVIRONMENT */
+          <>
+            {currentView === 'dashboard' && (
+              <Dashboard
+                user={currentUser}
+                balance={balance}
+                transactions={transactions}
+                onExecuteTransfer={handleExecuteTransfer}
+                onNavigate={handleNavigate}
+                onOpenLogin={() => handleSetAuthMode('login')}
+                onOpenRegister={() => handleSetAuthMode('register')}
+              />
+            )}
 
-        {currentView === 'admin' && currentUser?.role === 'ROLE_ADMIN' && (
-          <AdminDashboard
-            user={currentUser}
-            onBackToDashboard={() => setCurrentView('dashboard')}
-            onRefreshUser={refreshUserData}
-          />
-        )}
+            {currentView === 'admin' && currentUser?.role === 'ROLE_ADMIN' && (
+              <AdminDashboard
+                user={currentUser}
+                onBackToDashboard={() => handleNavigate('dashboard')}
+                onRefreshUser={refreshUserData}
+              />
+            )}
 
-        {currentView === 'accounts' && (
-          <AccountsView
-            user={currentUser}
-            balance={balance}
-          />
-        )}
+            {currentView === 'profile' && (
+              <UserProfileView
+                user={currentUser}
+                onUpdateUser={handleUpdateUserProfile}
+                onLogout={handleLogout}
+              />
+            )}
 
-        {currentView === 'transfers' && (
-          <TransfersView
-            user={currentUser}
-            balance={balance}
-            onExecuteTransfer={handleExecuteTransfer}
-            onOpenLogin={() => setAuthModal('login')}
-          />
-        )}
+            {currentView === 'accounts' && (
+              <AccountsView
+                user={currentUser}
+                balance={balance}
+              />
+            )}
 
-        {currentView === 'cards' && (
-          <CardsView
-            user={currentUser}
-          />
-        )}
+            {currentView === 'transfers' && (
+              <TransfersView
+                user={currentUser}
+                balance={balance}
+                onExecuteTransfer={handleExecuteTransfer}
+                onOpenLogin={() => handleSetAuthMode('login')}
+              />
+            )}
 
-        {currentView === 'vault' && (
-          <VaultView />
-        )}
+            {currentView === 'cards' && (
+              <CardsView
+                user={currentUser}
+              />
+            )}
 
-        {currentView === 'security' && (
-          <SecurityView />
-        )}
+            {currentView === 'vault' && (
+              <VaultView user={currentUser} balance={balance} />
+            )}
 
-        {currentView === 'analytics' && (
-          <AnalyticsView
-            balance={balance}
-          />
+            {currentView === 'security' && (
+              <SecurityView user={currentUser} />
+            )}
+
+            {currentView === 'analytics' && (
+              <AnalyticsView
+                user={currentUser}
+                balance={balance}
+                transactions={transactions}
+              />
+            )}
+          </>
         )}
       </main>
 
       {/* Institutional Banking Footer */}
-      <Footer onNavigate={setCurrentView} />
-
-      {/* Popup Auth Modal (Login & Register) */}
-      <AuthModal
-        isOpen={Boolean(authModal)}
-        initialMode={authModal || 'login'}
-        onClose={(nextMode) => {
-          if (typeof nextMode === 'string') {
-            setAuthModal(nextMode);
-          } else {
-            setAuthModal(null);
-          }
-        }}
-        onAuthSuccess={handleAuthSuccess}
-      />
+      <Footer onNavigate={(v) => {
+        if (currentUser) {
+          handleNavigate(v);
+        } else {
+          handleSetAuthMode('login');
+        }
+      }} />
     </div>
   );
 }

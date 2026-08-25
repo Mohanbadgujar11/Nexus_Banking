@@ -125,7 +125,7 @@ function App() {
     localStorage.setItem('nexus_current_user', JSON.stringify(updatedUser));
   };
 
-  const handleExecuteTransfer = async (amt, recipient, note) => {
+  const handleExecuteTransfer = async (amt, recipient, note, pin) => {
     if (!currentUser?.accountNumber) {
       return { success: false, message: 'Must be logged in to transfer.' };
     }
@@ -139,6 +139,7 @@ function App() {
           receiverAccountNumber: recipient,
           amount: amt,
           memo: note,
+          pin: pin,
         }),
       });
 
@@ -205,6 +206,7 @@ function App() {
                 user={currentUser}
                 onUpdateUser={handleUpdateUserProfile}
                 onLogout={handleLogout}
+                onNavigate={handleNavigate}
               />
             )}
 
@@ -212,6 +214,7 @@ function App() {
               <AccountsView
                 user={currentUser}
                 balance={balance}
+                onNavigate={handleNavigate}
               />
             )}
 
@@ -221,17 +224,23 @@ function App() {
                 balance={balance}
                 onExecuteTransfer={handleExecuteTransfer}
                 onOpenLogin={() => handleSetAuthMode('login')}
+                onNavigate={handleNavigate}
               />
             )}
 
             {currentView === 'cards' && (
               <CardsView
                 user={currentUser}
+                onNavigate={handleNavigate}
               />
             )}
 
             {currentView === 'vault' && (
-              <VaultView user={currentUser} balance={balance} />
+              <VaultView
+                user={currentUser}
+                balance={balance}
+                onNavigate={handleNavigate}
+              />
             )}
 
             {currentView === 'security' && (

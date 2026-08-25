@@ -1,6 +1,7 @@
 import { useState } from 'react';
+import PinPromptModal from './PinPromptModal.jsx';
 
-function TransfersView({ user, balance, onExecuteTransfer, onOpenLogin }) {
+function TransfersView({ user, balance, onExecuteTransfer, onOpenLogin, onNavigate }) {
   const [transferTab, setTransferTab] = useState('instant'); // 'instant' | 'swift' | 'scheduled'
   const [formData, setFormData] = useState({
     recipient: '',
@@ -13,6 +14,7 @@ function TransfersView({ user, balance, onExecuteTransfer, onOpenLogin }) {
   });
   const [statusMsg, setStatusMsg] = useState({ type: '', text: '' });
   const [transferStep, setTransferStep] = useState(null); // 'processing' | 'done'
+  const [isPinModalOpen, setIsPinModalOpen] = useState(false);
 
   const fxRates = {
     USD: 1.0,
@@ -26,7 +28,7 @@ function TransfersView({ user, balance, onExecuteTransfer, onOpenLogin }) {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = (e) => {
     e.preventDefault();
     if (!user) {
       if (onOpenLogin) onOpenLogin();
@@ -45,28 +47,52 @@ function TransfersView({ user, balance, onExecuteTransfer, onOpenLogin }) {
       return;
     }
 
+    if (!formData.recipient.trim()) {
+      setStatusMsg({ type: 'error', text: 'Please enter a valid beneficiary username or account number.' });
+      return;
+    }
+
+    // Open PIN prompt modal for verification
+    setIsPinModalOpen(true);
+  };
+
+  const handleAuthorizeTransferWithPin = async (pin) => {
+    const amt = parseFloat(formData.amount);
     setTransferStep('processing');
     setStatusMsg({ type: '', text: '' });
 
     try {
-      const result = await onExecuteTransfer(amt, formData.recipient.trim(), formData.note || `Transfer to ${formData.recipient}`);
+      const result = await onExecuteTransfer(
+        amt,
+        formData.recipient.trim(),
+        formData.note || `Transfer to ${formData.recipient}`,
+        pin
+      );
+
       if (result?.success) {
         setTransferStep('done');
         setStatusMsg({
           type: 'success',
           text: `Transferred $${amt.toFixed(2)} to ${formData.recipient} successfully!`,
         });
-        setFormData({ recipient: '', amount: '', note: '', currency: 'USD', frequency: 'Monthly', swiftBic: '', country: 'United Kingdom (GBP)' });
+        setFormData({
+          recipient: '',
+          amount: '',
+          note: '',
+          currency: 'USD',
+          frequency: 'Monthly',
+          swiftBic: '',
+          country: 'United Kingdom (GBP)',
+        });
+        setIsPinModalOpen(false);
+        return { success: true };
       } else {
         setTransferStep(null);
-        setStatusMsg({
-          type: 'error',
-          text: result?.message || 'Transfer failed.',
-        });
+        return { error: result?.message || 'Transfer authorization failed.' };
       }
     } catch {
       setTransferStep(null);
-      setStatusMsg({ type: 'error', text: 'Failed to communicate with transfer engine.' });
+      return { error: 'Failed to communicate with transfer engine.' };
     } finally {
       setTimeout(() => setTransferStep(null), 4000);
     }
@@ -357,6 +383,20 @@ function TransfersView({ user, balance, onExecuteTransfer, onOpenLogin }) {
           </div>
         </div>
       </div>
+
+      <PinPromptModal
+        isOpen={isPinModalOpen}
+        title="Authorize Outbound Transfer"
+        subtitle="Confirm your identity with your 6-digit cryptographic PIN to clear this transfer on the core ledger."
+        amount={formData.amount}
+        recipient={formData.recipient}
+        hasPinSet={user?.hasPinSet !== false}
+        onConfirm={handleAuthorizeTransferWithPin}
+        onClose={() => setIsPinModalOpen(false)}
+        onNavigateToSetPin={() => {
+          if (onNavigate) onNavigate('profile');
+        }}
+      />
     </div>
   );
 }

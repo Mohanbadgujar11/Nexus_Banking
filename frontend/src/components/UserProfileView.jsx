@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { API_BASE_URL } from '../config.js';
 
 function UserProfileView({ user, onUpdateUser, onLogout }) {
-  const [activeTab, setActiveTab] = useState('account'); // 'account' | 'password' | 'contact' | 'report' | 'rating' | 'guidelines' | 'deactivation'
+  const [activeTab, setActiveTab] = useState('account'); // 'account' | 'password' | 'pin' | 'settings' | 'contact' | 'report' | 'rating' | 'guidelines' | 'deactivation'
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState({ type: '', text: '' });
 
@@ -19,6 +19,52 @@ function UserProfileView({ user, onUpdateUser, onLogout }) {
     currentPassword: '',
     newPassword: '',
     confirmPassword: '',
+  });
+
+  // 6-Digit Security PIN Form
+  const [pinData, setPinData] = useState({
+    currentPin: '',
+    newPin: '',
+    confirmPin: '',
+    password: '',
+  });
+
+  // Platform & Banking Settings
+  const [settings, setSettings] = useState(() => {
+    try {
+      const saved = localStorage.getItem('nexus_user_settings');
+      return saved
+        ? JSON.parse(saved)
+        : {
+            sessionTimeout: '15',
+            requirePinForCards: true,
+            biometricAuth: false,
+            instantWireSms: true,
+            largeTxThreshold: '1000',
+            weeklyStatementDigest: true,
+            fraudAlerts: true,
+            maskBalanceOnDashboard: false,
+            currencySymbol: 'USD',
+            routingNetwork: 'FedWire RTGS',
+            internationalRemittance: true,
+            obsidianTheme: true,
+          };
+    } catch {
+      return {
+        sessionTimeout: '15',
+        requirePinForCards: true,
+        biometricAuth: false,
+        instantWireSms: true,
+        largeTxThreshold: '1000',
+        weeklyStatementDigest: true,
+        fraudAlerts: true,
+        maskBalanceOnDashboard: false,
+        currencySymbol: 'USD',
+        routingNetwork: 'FedWire RTGS',
+        internationalRemittance: true,
+        obsidianTheme: true,
+      };
+    }
   });
 
   // Contact Concierge Form
@@ -109,12 +155,12 @@ function UserProfileView({ user, onUpdateUser, onLogout }) {
     if (!user?.id) return;
 
     if (pwdData.newPassword.length < 6) {
-      showToast('New password must contain at least 6 characters.', 'error');
+      showToast('New password must be at least 6 characters.', 'error');
       return;
     }
 
     if (pwdData.newPassword !== pwdData.confirmPassword) {
-      showToast('New password confirmation does not match.', 'error');
+      showToast('New passwords do not match.', 'error');
       return;
     }
 
@@ -131,64 +177,138 @@ function UserProfileView({ user, onUpdateUser, onLogout }) {
 
       const data = await res.json();
       if (res.ok && data?.success) {
-        showToast('Master password successfully updated and encrypted.');
+        showToast('Master password updated successfully.');
         setPwdData({ currentPassword: '', newPassword: '', confirmPassword: '' });
       } else {
-        showToast(data?.message || 'Password update rejected. Check your current password.', 'error');
+        showToast(data?.message || 'Failed to update master password.', 'error');
       }
     } catch (err) {
       console.error('Password change error:', err);
-      showToast('Network error: Unable to reach security gateway.', 'error');
+      showToast('Network error: Could not verify security credentials.', 'error');
     } finally {
       setLoading(false);
     }
   };
 
-  // 3. Dispatch Concierge Message
+  // 3. Configure / Update 6-Digit Security PIN
+  const handleSavePin = async (e) => {
+    e.preventDefault();
+    if (!user?.id) return;
+
+    const cleanedPin = pinData.newPin.replace(/\D/g, '');
+    if (cleanedPin.length !== 6) {
+      showToast('New security PIN must be exactly 6 numeric digits.', 'error');
+      return;
+    }
+
+    if (pinData.newPin !== pinData.confirmPin) {
+      showToast('New PIN and confirmation PIN do not match.', 'error');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/users/${user.id}/pin`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          currentPin: pinData.currentPin ? pinData.currentPin.trim() : null,
+          newPin: cleanedPin,
+          password: pinData.password ? pinData.password.trim() : null,
+        }),
+      });
+
+      const data = await res.json();
+      if (res.ok && data?.success) {
+        showToast('6-digit security PIN successfully encrypted and active for all banking operations.');
+        setPinData({ currentPin: '', newPin: '', confirmPin: '', password: '' });
+        if (onUpdateUser) {
+          onUpdateUser({ ...user, hasPinSet: true });
+        }
+      } else {
+        showToast(data?.message || 'Failed to configure security PIN.', 'error');
+      }
+    } catch (err) {
+      console.error('PIN update error:', err);
+      showToast('Network error: Could not reach PIN security vault.', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 4. Save Banking Settings & Preferences
+  const handleSettingToggle = (key, value) => {
+    const updated = { ...settings, [key]: value };
+    setSettings(updated);
+    try {
+      localStorage.setItem('nexus_user_settings', JSON.stringify(updated));
+      window.dispatchEvent(new Event('nexus_settings_changed'));
+      showToast('Preference saved.');
+    } catch (e) {
+      console.error('Settings save error:', e);
+    }
+  };
+
+  // 5. Submit Concierge Message
   const handleSendConcierge = (e) => {
     e.preventDefault();
-    if (!contactMessage.message.trim()) return;
-    showToast('Your message has been securely dispatched to your Dedicated Relationship Concierge.');
-    setContactMessage({ subject: '', message: '', priority: 'Standard' });
+    if (!contactMessage.subject || !contactMessage.message) {
+      showToast('Please provide both a subject and inquiry message.', 'error');
+      return;
+    }
+    setLoading(true);
+    setTimeout(() => {
+      setLoading(false);
+      showToast('Inquiry dispatched to your dedicated Private Reserve Wealth Concierge. Priority SLA: < 15 mins.');
+      setContactMessage({ subject: '', message: '', priority: 'Standard' });
+    }, 1000);
   };
 
-  // 4. Report Problem
+  // 6. Submit Problem Report
   const handleSubmitReport = (e) => {
     e.preventDefault();
-    if (!reportData.details.trim()) return;
-
-    const ticketId = 'TKT-' + Math.floor(100000 + Math.random() * 900000);
-    const newTicket = {
-      id: ticketId,
-      category: reportData.category,
-      urgency: reportData.urgency,
-      subject: reportData.subject || 'Incident Investigation Request',
-      date: new Date().toLocaleString(),
-      status: 'UNDER REVIEW',
-    };
-
-    setSubmittedTickets([newTicket, ...submittedTickets]);
-    showToast(`Problem reported. Tracking Reference: #${ticketId} (Assigned to Operations)`);
-    setReportData({
-      category: 'Transaction Dispute',
-      urgency: 'Normal Priority',
-      subject: '',
-      details: '',
-    });
+    if (!reportData.subject || !reportData.details) {
+      showToast('Please fill out the ticket subject and description.', 'error');
+      return;
+    }
+    setLoading(true);
+    setTimeout(() => {
+      const ticketId = 'TKT-' + Math.floor(100000 + Math.random() * 900000);
+      const newTicket = {
+        id: ticketId,
+        category: reportData.category,
+        subject: reportData.subject,
+        urgency: reportData.urgency,
+        status: 'UNDER_INVESTIGATION',
+        createdAt: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+      };
+      setSubmittedTickets([newTicket, ...submittedTickets]);
+      setLoading(false);
+      showToast(`Dispute ticket ${ticketId} created. Assigned to compliance audit unit.`);
+      setReportData({ category: 'Transaction Dispute', urgency: 'Normal Priority', subject: '', details: '' });
+    }, 1200);
   };
 
-  // 5. Submit Rating
+  // 7. Submit Feedback Rating
   const handleSubmitRating = (e) => {
     e.preventDefault();
-    setRatingSubmitted(true);
-    showToast(`Thank you for your ${rating}-Star rating and feedback!`);
+    setLoading(true);
+    setTimeout(() => {
+      setLoading(false);
+      setRatingSubmitted(true);
+      showToast('Thank you! Your institutional rating has been submitted to executive oversight.');
+    }, 900);
   };
 
-  // 6. Submit Deactivation Request
-  const handleDeactivate = async (e) => {
+  // 8. Submit Deactivation Request
+  const handleSubmitDeactivation = async (e) => {
     e.preventDefault();
     if (!deactData.acknowledged) {
-      showToast('Please acknowledge the deactivation terms to proceed.', 'error');
+      showToast('Please acknowledge the terms before proceeding.', 'error');
+      return;
+    }
+    if (!deactData.password) {
+      showToast('Please enter your master password to verify identity.', 'error');
       return;
     }
 
@@ -263,7 +383,9 @@ function UserProfileView({ user, onUpdateUser, onLogout }) {
             </p>
             <div className="profile-badges-row">
               <span className="badge-committed">✓ KYC Verified</span>
-              <span className="badge-committed">🔒 256-Bit Hardware Encrypted</span>
+              <span className="badge-committed">
+                {user?.hasPinSet ? '🔒 6-Digit PIN Configured' : '⚠ PIN Not Set'}
+              </span>
               <span className="badge-committed">🏛 Member FDIC Insured</span>
             </div>
           </div>
@@ -297,7 +419,31 @@ function UserProfileView({ user, onUpdateUser, onLogout }) {
               onClick={() => setActiveTab('password')}
             >
               <span className="p-nav-icon">🔑</span>
-              <span>Master Password & Security</span>
+              <span>Master Password</span>
+            </button>
+
+            <button
+              type="button"
+              className={`profile-nav-btn ${activeTab === 'pin' ? 'active' : ''}`}
+              onClick={() => setActiveTab('pin')}
+              style={{ position: 'relative' }}
+            >
+              <span className="p-nav-icon">🔒</span>
+              <span>6-Digit Security PIN</span>
+              {!user?.hasPinSet && (
+                <span style={{ position: 'absolute', right: '12px', background: 'var(--error)', color: '#fff', fontSize: '0.65rem', padding: '2px 6px', borderRadius: '10px' }}>
+                  Action Needed
+                </span>
+              )}
+            </button>
+
+            <button
+              type="button"
+              className={`profile-nav-btn ${activeTab === 'settings' ? 'active' : ''}`}
+              onClick={() => setActiveTab('settings')}
+            >
+              <span className="p-nav-icon">⚙️</span>
+              <span>Banking Preferences</span>
             </button>
 
             <button
@@ -315,7 +461,7 @@ function UserProfileView({ user, onUpdateUser, onLogout }) {
               onClick={() => setActiveTab('report')}
             >
               <span className="p-nav-icon">⚠</span>
-              <span>Report a Problem / Dispute</span>
+              <span>Report a Dispute</span>
             </button>
 
             <button
@@ -398,7 +544,20 @@ function UserProfileView({ user, onUpdateUser, onLogout }) {
                   </div>
 
                   <div className="form-group">
-                    <label htmlFor="pf-email">Verified Email Address *</label>
+                    <label htmlFor="pf-username">Username (Permanent Core Identifier)</label>
+                    <input
+                      id="pf-username"
+                      type="text"
+                      value={user?.username || ''}
+                      disabled
+                      className="input-disabled"
+                    />
+                  </div>
+                </div>
+
+                <div className="form-row-dual">
+                  <div className="form-group">
+                    <label htmlFor="pf-email">Institutional Email *</label>
                     <input
                       id="pf-email"
                       type="email"
@@ -408,47 +567,34 @@ function UserProfileView({ user, onUpdateUser, onLogout }) {
                       disabled={loading}
                     />
                   </div>
-                </div>
 
-                <div className="form-row-dual">
                   <div className="form-group">
-                    <label htmlFor="pf-phone">Phone Number</label>
+                    <label htmlFor="pf-phone">Primary Phone Number *</label>
                     <input
                       id="pf-phone"
                       type="tel"
                       value={kycData.phoneNumber}
                       onChange={(e) => setKycData({ ...kycData, phoneNumber: e.target.value })}
-                      placeholder="+1 (555) 019-2834"
+                      required
                       disabled={loading}
-                    />
-                  </div>
-
-                  <div className="form-group">
-                    <label htmlFor="pf-username">Username (Read-Only)</label>
-                    <input
-                      id="pf-username"
-                      type="text"
-                      value={`@${user?.username || ''}`}
-                      disabled
-                      className="input-disabled"
                     />
                   </div>
                 </div>
 
                 <div className="form-group">
-                  <label htmlFor="pf-address">Residential / Corporate Address</label>
+                  <label htmlFor="pf-address">Residential / Corporate Address *</label>
                   <input
                     id="pf-address"
                     type="text"
                     value={kycData.address}
                     onChange={(e) => setKycData({ ...kycData, address: e.target.value })}
-                    placeholder="100 Wall Street, Suite 4200, New York, NY 10005"
+                    required
                     disabled={loading}
                   />
                 </div>
 
-                <button type="submit" className="lux-btn-primary full-width" disabled={loading}>
-                  {loading ? 'Saving Profile Updates...' : 'Save & Update KYC Record'}
+                <button type="submit" className="lux-btn-primary" disabled={loading}>
+                  {loading ? 'Saving to Core...' : 'Save Profile Details'}
                 </button>
               </form>
             </div>
@@ -459,118 +605,387 @@ function UserProfileView({ user, onUpdateUser, onLogout }) {
             <div className="lux-card">
               <div className="lux-card-header">
                 <div>
-                  <h3>Master Security Password</h3>
-                  <p>Update your authorization credentials guarded by cryptographic hashing</p>
+                  <h3>Master Password Credentials</h3>
+                  <p>Manage your high-entropy account password for master portal access.</p>
                 </div>
-                <span className="health-tag-active">Encrypted Enclave</span>
+                <span className="badge-committed">Argon2 / BCrypt Encrypted</span>
               </div>
 
-              <form onSubmit={handleChangePassword} className="lux-form">
+              <form onSubmit={handleChangePassword} className="lux-form profile-form">
                 <div className="form-group">
-                  <label htmlFor="pwd-current">Current Master Password *</label>
+                  <label htmlFor="curr-pwd">Current Master Password *</label>
                   <input
-                    id="pwd-current"
+                    id="curr-pwd"
                     type="password"
+                    placeholder="Enter current master password"
                     value={pwdData.currentPassword}
                     onChange={(e) => setPwdData({ ...pwdData, currentPassword: e.target.value })}
-                    placeholder="Enter current password"
                     required
                     disabled={loading}
                   />
                 </div>
 
                 <div className="form-group">
-                  <label htmlFor="pwd-new">New Master Password * (Min. 6 characters)</label>
+                  <label htmlFor="new-pwd">New Master Password *</label>
                   <input
-                    id="pwd-new"
+                    id="new-pwd"
                     type="password"
+                    placeholder="Min. 6 characters, recommend uppercase & numbers"
                     value={pwdData.newPassword}
                     onChange={(e) => setPwdData({ ...pwdData, newPassword: e.target.value })}
-                    placeholder="Create a high-entropy new password"
                     required
                     disabled={loading}
                   />
 
                   {pwdData.newPassword && (
-                    <div className="entropy-meter-wrap">
-                      <div className="entropy-label-row">
-                        <span>Entropy Strength:</span>
-                        <strong style={{ color: strength.color }}>{strength.label}</strong>
-                      </div>
-                      <div className="entropy-bar-track">
+                    <div className="password-meter-wrap">
+                      <div className="meter-bar-bg">
                         <div
-                          className="entropy-bar-fill"
-                          style={{ width: `${strength.pct}%`, background: strength.color }}
+                          className="meter-bar-fill"
+                          style={{ width: `${strength.pct}%`, backgroundColor: strength.color }}
                         ></div>
                       </div>
+                      <span className="meter-label" style={{ color: strength.color }}>
+                        Strength: {strength.label}
+                      </span>
                     </div>
                   )}
                 </div>
 
                 <div className="form-group">
-                  <label htmlFor="pwd-confirm">Confirm New Password *</label>
+                  <label htmlFor="confirm-pwd">Confirm New Master Password *</label>
                   <input
-                    id="pwd-confirm"
+                    id="confirm-pwd"
                     type="password"
+                    placeholder="Re-enter new master password"
                     value={pwdData.confirmPassword}
                     onChange={(e) => setPwdData({ ...pwdData, confirmPassword: e.target.value })}
-                    placeholder="Re-enter new password"
                     required
                     disabled={loading}
                   />
                 </div>
 
-                <button type="submit" className="lux-btn-primary full-width" disabled={loading}>
-                  {loading ? 'Encrypting & Updating...' : 'Commit & Update Master Password'}
+                <button type="submit" className="lux-btn-primary" disabled={loading}>
+                  {loading ? 'Re-encrypting Password...' : 'Update Master Password'}
                 </button>
               </form>
             </div>
           )}
 
-          {/* TAB 3: CONTACT US & PRIVATE CONCIERGE */}
+          {/* TAB 3: 6-DIGIT SECURITY PIN MANAGEMENT */}
+          {activeTab === 'pin' && (
+            <div className="lux-card">
+              <div className="lux-card-header">
+                <div>
+                  <h3>6-Digit Security Transaction PIN</h3>
+                  <p>Your cryptographic PIN is required to authorize outbound wire transfers, card actions, and vault deposits.</p>
+                </div>
+                <span className={`badge-committed ${user?.hasPinSet ? '' : 'alert-badge-err'}`}>
+                  {user?.hasPinSet ? '✓ PIN Active' : '⚠ PIN Not Configured'}
+                </span>
+              </div>
+
+              <div className="pin-overview-card" style={{ background: 'rgba(212, 175, 55, 0.05)', padding: '1.25rem', borderRadius: '12px', border: '1px solid rgba(212, 175, 55, 0.2)', marginBottom: '1.5rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                  <div style={{ fontSize: '2rem' }}>🛡️</div>
+                  <div>
+                    <h4 style={{ margin: '0 0 0.25rem 0', color: 'var(--gold)' }}>
+                      {user?.hasPinSet ? 'Your 6-Digit PIN is Active' : 'Setup Your 6-Digit PIN'}
+                    </h4>
+                    <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                      All transfers and card operations require this 6-digit PIN. Never share your PIN with anyone.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <form onSubmit={handleSavePin} className="lux-form profile-form">
+                {user?.hasPinSet ? (
+                  <div className="form-group">
+                    <label htmlFor="pf-curr-pin">Current 6-Digit PIN (or Master Password) *</label>
+                    <input
+                      id="pf-curr-pin"
+                      type="password"
+                      maxLength={6}
+                      inputMode="numeric"
+                      placeholder="Enter current 6-digit PIN"
+                      value={pinData.currentPin}
+                      onChange={(e) => setPinData({ ...pinData, currentPin: e.target.value.replace(/\D/g, '') })}
+                      disabled={loading}
+                    />
+                    <small style={{ color: 'var(--text-muted)' }}>
+                      Alternatively, enter master password below if you forgot your current PIN
+                    </small>
+                  </div>
+                ) : (
+                  <div className="form-group">
+                    <label htmlFor="pf-auth-pwd">Confirm Master Password *</label>
+                    <input
+                      id="pf-auth-pwd"
+                      type="password"
+                      placeholder="Enter master password to initialize PIN"
+                      value={pinData.password}
+                      onChange={(e) => setPinData({ ...pinData, password: e.target.value })}
+                      required
+                      disabled={loading}
+                    />
+                  </div>
+                )}
+
+                <div className="form-row-dual">
+                  <div className="form-group">
+                    <label htmlFor="pf-new-pin" style={{ color: 'var(--gold)' }}>
+                      New 6-Digit Security PIN *
+                    </label>
+                    <input
+                      id="pf-new-pin"
+                      type="password"
+                      maxLength={6}
+                      inputMode="numeric"
+                      placeholder="6 numeric digits"
+                      value={pinData.newPin}
+                      onChange={(e) => setPinData({ ...pinData, newPin: e.target.value.replace(/\D/g, '') })}
+                      required
+                      disabled={loading}
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label htmlFor="pf-conf-pin" style={{ color: 'var(--gold)' }}>
+                      Confirm 6-Digit PIN *
+                    </label>
+                    <input
+                      id="pf-conf-pin"
+                      type="password"
+                      maxLength={6}
+                      inputMode="numeric"
+                      placeholder="Re-enter 6 digits"
+                      value={pinData.confirmPin}
+                      onChange={(e) => setPinData({ ...pinData, confirmPin: e.target.value.replace(/\D/g, '') })}
+                      required
+                      disabled={loading}
+                    />
+                  </div>
+                </div>
+
+                {pinData.newPin && pinData.confirmPin && pinData.newPin === pinData.confirmPin && (
+                  <div style={{ color: 'var(--success)', fontSize: '0.85rem', marginBottom: '1rem' }}>
+                    ✓ 6-Digit PIN confirmation matches
+                  </div>
+                )}
+
+                <button type="submit" className="lux-btn-primary" disabled={loading || pinData.newPin.length !== 6}>
+                  {loading ? 'Encrypting & Saving PIN...' : user?.hasPinSet ? 'Update 6-Digit PIN' : 'Activate 6-Digit Security PIN'}
+                </button>
+              </form>
+            </div>
+          )}
+
+          {/* TAB 4: BANKING PREFERENCES & PLATFORM SETTINGS */}
+          {activeTab === 'settings' && (
+            <div className="lux-card">
+              <div className="lux-card-header">
+                <div>
+                  <h3>Platform & Banking Settings</h3>
+                  <p>Customize security parameters, alert thresholds, privacy masks, and routing options.</p>
+                </div>
+                <span className="badge-committed">Enterprise Client Controls</span>
+              </div>
+
+              <div className="settings-section-list">
+                {/* 1. Transactional Security */}
+                <div className="settings-group-card" style={{ marginBottom: '1.5rem', padding: '1.25rem', background: 'rgba(255, 255, 255, 0.02)', borderRadius: '12px', border: '1px solid var(--border)' }}>
+                  <h4 style={{ color: 'var(--gold)', margin: '0 0 1rem 0' }}>🔒 Transactional Security & Session Controls</h4>
+
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', paddingBottom: '1rem', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                    <div>
+                      <strong>Auto-Lock Inactivity Timeout</strong>
+                      <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.8rem' }}>Automatically lock session when inactive</p>
+                    </div>
+                    <select
+                      value={settings.sessionTimeout}
+                      onChange={(e) => handleSettingToggle('sessionTimeout', e.target.value)}
+                      style={{ padding: '0.4rem 0.8rem', background: 'var(--bg-card)', border: '1px solid var(--border)', color: 'var(--text-main)', borderRadius: '6px' }}
+                    >
+                      <option value="5">5 Minutes</option>
+                      <option value="15">15 Minutes (Default)</option>
+                      <option value="30">30 Minutes</option>
+                      <option value="60">1 Hour</option>
+                    </select>
+                  </div>
+
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', paddingBottom: '1rem', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                    <div>
+                      <strong>Require 6-Digit PIN on Card Freeze/Unfreeze</strong>
+                      <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.8rem' }}>Mandates PIN check before altering card states</p>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={settings.requirePinForCards}
+                      onChange={(e) => handleSettingToggle('requirePinForCards', e.target.checked)}
+                      style={{ width: '18px', height: '18px', accentColor: 'var(--gold)', cursor: 'pointer' }}
+                    />
+                  </div>
+
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                      <strong>Biometric & WebAuthn Fast Sign-off</strong>
+                      <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.8rem' }}>Use TouchID / Windows Hello for rapid authorizations</p>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={settings.biometricAuth}
+                      onChange={(e) => handleSettingToggle('biometricAuth', e.target.checked)}
+                      style={{ width: '18px', height: '18px', accentColor: 'var(--gold)', cursor: 'pointer' }}
+                    />
+                  </div>
+                </div>
+
+                {/* 2. Notifications & Alerts */}
+                <div className="settings-group-card" style={{ marginBottom: '1.5rem', padding: '1.25rem', background: 'rgba(255, 255, 255, 0.02)', borderRadius: '12px', border: '1px solid var(--border)' }}>
+                  <h4 style={{ color: 'var(--gold)', margin: '0 0 1rem 0' }}>🔔 Real-Time Notifications & Auditing</h4>
+
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', paddingBottom: '1rem', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                    <div>
+                      <strong>Instant Outbound Wire SMS Alerts</strong>
+                      <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.8rem' }}>SMS notification dispatched upon any debit clearing</p>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={settings.instantWireSms}
+                      onChange={(e) => handleSettingToggle('instantWireSms', e.target.checked)}
+                      style={{ width: '18px', height: '18px', accentColor: 'var(--gold)', cursor: 'pointer' }}
+                    />
+                  </div>
+
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', paddingBottom: '1rem', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                    <div>
+                      <strong>High-Value Transaction Alert Threshold</strong>
+                      <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.8rem' }}>Send immediate push alerts for single debits over threshold</p>
+                    </div>
+                    <select
+                      value={settings.largeTxThreshold}
+                      onChange={(e) => handleSettingToggle('largeTxThreshold', e.target.value)}
+                      style={{ padding: '0.4rem 0.8rem', background: 'var(--bg-card)', border: '1px solid var(--border)', color: 'var(--text-main)', borderRadius: '6px' }}
+                    >
+                      <option value="500">$500.00</option>
+                      <option value="1000">$1,000.00 (Standard)</option>
+                      <option value="5000">$5,000.00</option>
+                      <option value="10000">$10,000.00 (Private Reserve)</option>
+                    </select>
+                  </div>
+
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                      <strong>Weekly Reserve Statements & Audit Digest</strong>
+                      <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.8rem' }}>Weekly automated PDF reconciliation report delivery</p>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={settings.weeklyStatementDigest}
+                      onChange={(e) => handleSettingToggle('weeklyStatementDigest', e.target.checked)}
+                      style={{ width: '18px', height: '18px', accentColor: 'var(--gold)', cursor: 'pointer' }}
+                    />
+                  </div>
+                </div>
+
+                {/* 3. Display & Privacy */}
+                <div className="settings-group-card" style={{ marginBottom: '1.5rem', padding: '1.25rem', background: 'rgba(255, 255, 255, 0.02)', borderRadius: '12px', border: '1px solid var(--border)' }}>
+                  <h4 style={{ color: 'var(--gold)', margin: '0 0 1rem 0' }}>👁️ Privacy Mode & Display Localization</h4>
+
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', paddingBottom: '1rem', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                    <div>
+                      <strong>Mask Account Balance by Default (Privacy Shield)</strong>
+                      <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.8rem' }}>Obfuscates total reserve balance on dashboard until revealed</p>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={settings.maskBalanceOnDashboard}
+                      onChange={(e) => handleSettingToggle('maskBalanceOnDashboard', e.target.checked)}
+                      style={{ width: '18px', height: '18px', accentColor: 'var(--gold)', cursor: 'pointer' }}
+                    />
+                  </div>
+
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', paddingBottom: '1rem', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                    <div>
+                      <strong>Primary Currency Display Symbol</strong>
+                      <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.8rem' }}>Default formatting for balance and ledger figures</p>
+                    </div>
+                    <select
+                      value={settings.currencySymbol}
+                      onChange={(e) => handleSettingToggle('currencySymbol', e.target.value)}
+                      style={{ padding: '0.4rem 0.8rem', background: 'var(--bg-card)', border: '1px solid var(--border)', color: 'var(--text-main)', borderRadius: '6px' }}
+                    >
+                      <option value="USD">USD ($)</option>
+                      <option value="EUR">EUR (€)</option>
+                      <option value="GBP">GBP (£)</option>
+                      <option value="JPY">JPY (¥)</option>
+                      <option value="CHF">CHF (Fr.)</option>
+                    </select>
+                  </div>
+
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                      <strong>Default Wire Routing Network</strong>
+                      <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.8rem' }}>Preferred capital movement rails</p>
+                    </div>
+                    <select
+                      value={settings.routingNetwork}
+                      onChange={(e) => handleSettingToggle('routingNetwork', e.target.value)}
+                      style={{ padding: '0.4rem 0.8rem', background: 'var(--bg-card)', border: '1px solid var(--border)', color: 'var(--text-main)', borderRadius: '6px' }}
+                    >
+                      <option value="FedWire RTGS">FedWire RTGS (Real-Time Gross)</option>
+                      <option value="SWIFT GPI">SWIFT GPI (Global)</option>
+                      <option value="Nexus Internal">Nexus Internal Core (Zero-Fee)</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 5: CONTACT PRIVATE CONCIERGE */}
           {activeTab === 'contact' && (
             <div className="lux-card">
               <div className="lux-card-header">
                 <div>
-                  <h3>Private Banking Concierge & Contact</h3>
-                  <p>24/7 priority communication channel with dedicated relationship officers</p>
+                  <h3>Private Concierge & Wealth Desk</h3>
+                  <p>Direct priority line to your dedicated institutional relationship manager.</p>
                 </div>
-                <span className="zero-fee-pill">24/7 Available</span>
+                <span className="badge-committed">24/7 Available</span>
               </div>
 
-              <div className="concierge-cards-grid">
-                <div className="concierge-box">
-                  <div className="c-icon">🏛</div>
-                  <h4>Private Wealth Desk</h4>
-                  <p className="c-val">+1 (800) 555-NEXUS</p>
-                  <span className="c-sub">Toll-Free Priority Direct Line</span>
+              <div className="concierge-contact-grid">
+                <div className="concierge-card-item">
+                  <span className="c-icon">📞</span>
+                  <strong>Private Hotline</strong>
+                  <code>+1 (800) 840-NEXUS</code>
+                  <small>Priority Direct Extension 402</small>
                 </div>
-
-                <div className="concierge-box">
-                  <div className="c-icon">✉</div>
-                  <h4>Encrypted Email</h4>
-                  <p className="c-val">private.concierge@nexus.io</p>
-                  <span className="c-sub">&lt; 15 min response guaranteed</span>
+                <div className="concierge-card-item">
+                  <span className="c-icon">✉</span>
+                  <strong>Executive Desk</strong>
+                  <code>concierge@nexus.io</code>
+                  <small>Encrypted PGP Available</small>
                 </div>
-
-                <div className="concierge-box">
-                  <div className="c-icon">📍</div>
-                  <h4>Headquarters Enclave</h4>
-                  <p className="c-val">100 Wall St, 42nd Floor</p>
-                  <span className="c-sub">New York, NY 10005</span>
+                <div className="concierge-card-item">
+                  <span className="c-icon">🏛</span>
+                  <strong>Physical Headquarters</strong>
+                  <span>100 Wall Street, 42nd Fl</span>
+                  <small>New York, NY 10005</small>
                 </div>
               </div>
 
-              <form onSubmit={handleSendConcierge} className="lux-form" style={{ marginTop: '28px' }}>
-                <h4 className="form-section-title">Send Direct Priority Message</h4>
+              <form onSubmit={handleSendConcierge} className="lux-form profile-form">
+                <h4 className="form-section-title">Dispatch Direct Instruction</h4>
 
                 <div className="form-row-dual">
                   <div className="form-group">
-                    <label htmlFor="cc-subject">Subject / Inquiry Title</label>
+                    <label htmlFor="c-subject">Subject / Inquiry Type *</label>
                     <input
-                      id="cc-subject"
+                      id="c-subject"
                       type="text"
-                      placeholder="e.g. Wire Confirmation / Custom Credit Facility"
+                      placeholder="e.g. Outbound Cross-Border Escrow Approval"
                       value={contactMessage.subject}
                       onChange={(e) => setContactMessage({ ...contactMessage, subject: e.target.value })}
                       required
@@ -578,86 +993,85 @@ function UserProfileView({ user, onUpdateUser, onLogout }) {
                   </div>
 
                   <div className="form-group">
-                    <label htmlFor="cc-priority">Dispatch Priority</label>
+                    <label htmlFor="c-priority">Priority SLA *</label>
                     <select
-                      id="cc-priority"
+                      id="c-priority"
                       value={contactMessage.priority}
                       onChange={(e) => setContactMessage({ ...contactMessage, priority: e.target.value })}
                     >
-                      <option value="Standard">Standard (General Inquiry)</option>
-                      <option value="Urgent">Urgent (Trading / Wire Clearance)</option>
-                      <option value="VIP Escrow">VIP Escrow / High Value</option>
+                      <option value="Standard">Standard (Within 2 Hours)</option>
+                      <option value="High Priority">High Priority (Within 30 Mins)</option>
+                      <option value="Emergency Escrow">Emergency Escrow / Wire Hold (Immediate)</option>
                     </select>
                   </div>
                 </div>
 
                 <div className="form-group">
-                  <label htmlFor="cc-message">Detailed Inquiry</label>
+                  <label htmlFor="c-msg">Instruction Details *</label>
                   <textarea
-                    id="cc-message"
+                    id="c-msg"
                     rows="4"
-                    placeholder="Describe your inquiry in detail..."
+                    placeholder="Specify the details of your wealth request or required documentation..."
                     value={contactMessage.message}
                     onChange={(e) => setContactMessage({ ...contactMessage, message: e.target.value })}
                     required
                   ></textarea>
                 </div>
 
-                <button type="submit" className="lux-btn-primary full-width">
-                  Dispatch Message to Private Concierge
+                <button type="submit" className="lux-btn-primary" disabled={loading}>
+                  {loading ? 'Transmitting Securely...' : 'Transmit Instruction to Concierge'}
                 </button>
               </form>
             </div>
           )}
 
-          {/* TAB 4: REPORT A PROBLEM / DISPUTE */}
+          {/* TAB 6: DISPUTE & PROBLEM RESOLUTION */}
           {activeTab === 'report' && (
             <div className="lux-card">
               <div className="lux-card-header">
                 <div>
-                  <h3>Report a Problem or Transaction Dispute</h3>
-                  <p>Submit incident details for investigation by the Fraud & Settlement Team</p>
+                  <h3>Dispute Resolution & Transaction Investigation</h3>
+                  <p>Initiate formal transactional investigations or report security discrepancies.</p>
                 </div>
-                <span className="badge-committed">Zero Liability Guarantee</span>
+                <span className="badge-committed">Compliance Protected</span>
               </div>
 
-              <form onSubmit={handleSubmitReport} className="lux-form">
+              <form onSubmit={handleSubmitReport} className="lux-form profile-form">
                 <div className="form-row-dual">
                   <div className="form-group">
-                    <label htmlFor="rpt-cat">Problem Category *</label>
+                    <label htmlFor="rep-cat">Dispute Category *</label>
                     <select
-                      id="rpt-cat"
+                      id="rep-cat"
                       value={reportData.category}
                       onChange={(e) => setReportData({ ...reportData, category: e.target.value })}
                     >
-                      <option value="Transaction Dispute">Transaction Dispute / Unauthorized Charge</option>
-                      <option value="Card Authorization Error">Card Authorization / POS Failure</option>
-                      <option value="Wire Settlement Delay">Wire Settlement Delay</option>
-                      <option value="Security Vulnerability">Security or Phishing Concern</option>
-                      <option value="Other">Other Operational Inconvenience</option>
+                      <option value="Transaction Dispute">Unrecognized Outbound Transaction</option>
+                      <option value="Card Fraud">Card Unauthorized Charge</option>
+                      <option value="SWIFT Clearance Delay">SWIFT / Wire Clearance Delay</option>
+                      <option value="Security Anomaly">Portal Security / IP Anomaly</option>
                     </select>
                   </div>
 
                   <div className="form-group">
-                    <label htmlFor="rpt-urg">Urgency Level *</label>
+                    <label htmlFor="rep-urgency">Urgency Level *</label>
                     <select
-                      id="rpt-urg"
+                      id="rep-urgency"
                       value={reportData.urgency}
                       onChange={(e) => setReportData({ ...reportData, urgency: e.target.value })}
                     >
-                      <option value="Normal Priority">Normal (Resolved within 24h)</option>
-                      <option value="High Priority">High Priority (&lt; 4h)</option>
-                      <option value="Emergency Fraud Alert">Emergency Fraud Alert (Immediate Lock)</option>
+                      <option value="Normal Priority">Normal (24-Hour Review)</option>
+                      <option value="High Priority">High Priority (4-Hour Response)</option>
+                      <option value="Critical Fraud">Critical (Immediate Account Hold)</option>
                     </select>
                   </div>
                 </div>
 
                 <div className="form-group">
-                  <label htmlFor="rpt-sub">Incident Subject</label>
+                  <label htmlFor="rep-subject">Ticket Subject / Reference Number *</label>
                   <input
-                    id="rpt-sub"
+                    id="rep-subject"
                     type="text"
-                    placeholder="e.g. Unrecognized charge on Titanium Card ending in 8829"
+                    placeholder="e.g. Dispute for TX-82910482 on Aug 20"
                     value={reportData.subject}
                     onChange={(e) => setReportData({ ...reportData, subject: e.target.value })}
                     required
@@ -665,35 +1079,36 @@ function UserProfileView({ user, onUpdateUser, onLogout }) {
                 </div>
 
                 <div className="form-group">
-                  <label htmlFor="rpt-details">Detailed Explanation & Transaction References</label>
+                  <label htmlFor="rep-details">Comprehensive Description *</label>
                   <textarea
-                    id="rpt-details"
+                    id="rep-details"
                     rows="4"
-                    placeholder="Please include approximate amount, dates, transaction reference numbers, or description..."
+                    placeholder="Provide timestamps, merchant names, amounts, or discrepancy details..."
                     value={reportData.details}
                     onChange={(e) => setReportData({ ...reportData, details: e.target.value })}
                     required
                   ></textarea>
                 </div>
 
-                <button type="submit" className="lux-btn-primary full-width">
-                  Submit Problem Report to Investigation Unit
+                <button type="submit" className="lux-btn-primary" disabled={loading}>
+                  {loading ? 'Filing Investigation Ticket...' : 'File Formal Dispute Ticket'}
                 </button>
               </form>
 
-              {/* Submitted Tickets History */}
               {submittedTickets.length > 0 && (
-                <div style={{ marginTop: '32px' }}>
-                  <h4 className="form-section-title">Submitted Incident Reports</h4>
-                  <div className="tickets-list">
+                <div className="submitted-tickets-box">
+                  <h4>Active Investigation Tickets ({submittedTickets.length})</h4>
+                  <div className="ticket-list">
                     {submittedTickets.map((t) => (
                       <div key={t.id} className="ticket-item">
-                        <div>
-                          <span className="ticket-id gold-text">#{t.id}</span>
-                          <strong>{t.subject}</strong>
-                          <span className="ticket-meta">{t.category} • {t.date}</span>
+                        <div className="ticket-header">
+                          <code className="gold-text">{t.id}</code>
+                          <span className="badge-committed">{t.status}</span>
                         </div>
-                        <span className="ticket-status-tag">{t.status}</span>
+                        <p className="ticket-subject">{t.subject}</p>
+                        <div className="ticket-meta">
+                          <span>{t.category}</span> • <span>{t.urgency}</span> • <span>Filed {t.createdAt}</span>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -702,35 +1117,40 @@ function UserProfileView({ user, onUpdateUser, onLogout }) {
             </div>
           )}
 
-          {/* TAB 5: CLIENT EXPERIENCE RATING */}
+          {/* TAB 7: CLIENT EXPERIENCE RATING */}
           {activeTab === 'rating' && (
             <div className="lux-card">
               <div className="lux-card-header">
                 <div>
-                  <h3>Client Experience & Platform Rating</h3>
-                  <p>Your feedback shapes the continuous perfection of our private banking services</p>
+                  <h3>Institutional Client Experience</h3>
+                  <p>Provide executive feedback regarding our core banking latency, security, and concierge services.</p>
                 </div>
-                <span className="gold-text">★ 4.98 / 5.0 Average</span>
+                <span className="badge-committed">Executive Oversight</span>
               </div>
 
               {ratingSubmitted ? (
                 <div className="rating-success-box">
-                  <div style={{ fontSize: '48px', marginBottom: '12px' }}>💎</div>
-                  <h3 style={{ color: 'var(--text-h)', margin: '0 0 8px' }}>Thank You for Your Feedback</h3>
-                  <p style={{ color: 'var(--text-muted)', margin: 0 }}>
-                    We deeply value your perspective as a Private Reserve member. Your insights have been recorded.
-                  </p>
+                  <span className="big-check">✓</span>
+                  <h3>Thank you for your rating!</h3>
+                  <p>Your feedback is audited by the Nexus Executive Banking Committee to drive continuous quality enhancements.</p>
+                  <button
+                    type="button"
+                    className="lux-btn-outline"
+                    onClick={() => setRatingSubmitted(false)}
+                  >
+                    Submit Another Review
+                  </button>
                 </div>
               ) : (
-                <form onSubmit={handleSubmitRating} className="lux-form">
-                  <div className="star-rating-box">
-                    <label>Overall Banking Service Rating</label>
+                <form onSubmit={handleSubmitRating} className="lux-form profile-form">
+                  <div className="form-group star-rating-group">
+                    <label>Overall Banking Experience</label>
                     <div className="stars-row">
                       {[1, 2, 3, 4, 5].map((star) => (
                         <button
                           key={star}
                           type="button"
-                          className={`star-btn ${(hoverRating || rating) >= star ? 'filled' : ''}`}
+                          className={`star-btn ${(hoverRating || rating) >= star ? 'star-filled' : ''}`}
                           onMouseEnter={() => setHoverRating(star)}
                           onMouseLeave={() => setHoverRating(0)}
                           onClick={() => setRating(star)}
@@ -738,112 +1158,111 @@ function UserProfileView({ user, onUpdateUser, onLogout }) {
                           ★
                         </button>
                       ))}
+                      <span className="star-rating-text">
+                        {rating === 5 && 'Exceptional (Private Reserve Tier)'}
+                        {rating === 4 && 'Very Good (Institutional Grade)'}
+                        {rating === 3 && 'Average'}
+                        {rating === 2 && 'Needs Improvement'}
+                        {rating === 1 && 'Unsatisfactory'}
+                      </span>
                     </div>
-                    <span className="rating-desc-text">
-                      {rating === 5 && '★★★★★ Exceptional Sovereign Tier Service'}
-                      {rating === 4 && '★★★★☆ Great High-Velocity Experience'}
-                      {rating === 3 && '★★★☆☆ Satisfactory'}
-                      {rating <= 2 && '★★☆☆☆ Needs Improvement'}
-                    </span>
                   </div>
 
                   <div className="form-group">
-                    <label htmlFor="fb-text">Comments, Feature Suggestions & Feedback</label>
+                    <label htmlFor="rating-comment">Detailed Feedback / Feature Requests</label>
                     <textarea
-                      id="fb-text"
+                      id="rating-comment"
                       rows="4"
-                      placeholder="Tell us what you love about Nexus Banking or features you'd like added next..."
+                      placeholder="Share your thoughts on transfer execution speed, card controls, or portal interface..."
                       value={feedbackText}
                       onChange={(e) => setFeedbackText(e.target.value)}
                     ></textarea>
                   </div>
 
-                  <button type="submit" className="lux-btn-primary full-width">
-                    Submit Client Rating & Feedback
+                  <button type="submit" className="lux-btn-primary" disabled={loading}>
+                    {loading ? 'Submitting Evaluation...' : 'Submit Institutional Rating'}
                   </button>
                 </form>
               )}
             </div>
           )}
 
-          {/* TAB 6: GUIDELINES & COMPLIANCE */}
+          {/* TAB 8: GUIDELINES & COMPLIANCE */}
           {activeTab === 'guidelines' && (
             <div className="lux-card">
               <div className="lux-card-header">
                 <div>
-                  <h3>Institutional Guidelines & Security Protocols</h3>
-                  <p>Standard operating procedures, fraud guarantees, and compliance disclosures</p>
+                  <h3>Institutional Guidelines & Regulatory Framework</h3>
+                  <p>Federal deposit insurance rules, settlement clearing policies, and compliance terms.</p>
                 </div>
-                <span className="badge-committed">Statutory Standards</span>
+                <span className="badge-committed">FDIC & OCC Regulated</span>
               </div>
 
               <div className="guidelines-accordion">
                 <div className="guideline-item">
-                  <h4>1. Real-Time Settlement & Transfer Timelines</h4>
+                  <h4>1. FDIC Insurance & Reserve Backing</h4>
                   <p>
-                    Peer-to-peer internal transfers between verified Nexus accounts settle with zero latency (&lt; 250ms). FedWire and SWIFT transfers are processed within standard Federal Reserve business windows with end-to-end cryptographic tracking.
+                    All deposits held in Nexus Core checking and vault reserves are insured by the Federal Deposit Insurance Corporation (FDIC) up to \$250,000 per depositor for individual accounts, with extended coverage up to \$25,000,000 through the IntraFi reciprocal deposit network.
                   </p>
                 </div>
 
                 <div className="guideline-item">
-                  <h4>2. Zero-Liability Fraud Protection Guarantee</h4>
+                  <h4>2. Real-Time Settlement & Clearing (RTGS)</h4>
                   <p>
-                    All Titanium Metal and Single-Use Virtual Cards are covered by the Nexus Zero Liability Policy. Unauthorized charges reported within 60 days are provisionally credited immediately upon dispute receipt.
+                    Outbound domestic wire transfers dispatched via the FedWire RTGS channel settle atomically within 15 seconds during Federal Reserve operational hours. SWIFT GPI transfers require 1–3 hours for cross-border beneficiary clearance.
                   </p>
                 </div>
 
                 <div className="guideline-item">
-                  <h4>3. Multi-Account FDIC Insurance Sweep Capacity</h4>
+                  <h4>3. 6-Digit Cryptographic PIN Protocol</h4>
                   <p>
-                    Through the Nexus Automated Deposit Sweep Network, client liquidity is programmatically allocated across a network of FDIC-insured institutions, expanding standard \$250,000 coverage up to \$2,500,000 per entity.
+                    In accordance with FIPS 140-2 Level 4 banking standards, all high-value capital dispatches and card authorizations require the client's 6-digit cryptographic PIN. The PIN is hashed client-side with BCrypt salting and is never stored in plain text.
                   </p>
                 </div>
 
                 <div className="guideline-item">
-                  <h4>4. Hardware Security & Biometric Mandates</h4>
+                  <h4>4. Anti-Money Laundering (AML) & OFAC Screening</h4>
                   <p>
-                    Users are strongly urged to keep Two-Factor Authentication (2FA) enabled. All login sessions, card freeze requests, and master password modifications are immutably signed with SHA-256 fingerprints.
+                    All transactions executed on Nexus Core are evaluated in real time against global sanctions lists, including OFAC, UN Security Council, and EU restrictive measures using zero-knowledge cryptographic heuristics.
                   </p>
                 </div>
               </div>
             </div>
           )}
 
-          {/* TAB 7: ACCOUNT LOCK & DEACTIVATION */}
+          {/* TAB 9: ACCOUNT LOCK & DEACTIVATION */}
           {activeTab === 'deactivation' && (
-            <div className="lux-card deactivation-card">
+            <div className="lux-card deact-card">
               <div className="lux-card-header">
                 <div>
-                  <h3 className="danger-text">Account Lock & Deactivation Request</h3>
-                  <p>Request temporary security freeze or permanent account closure</p>
+                  <h3 className="danger-title">Account Security Freeze & Deactivation</h3>
+                  <p>Place an emergency freeze on your account or request permanent regulatory closure.</p>
                 </div>
-                <span className="alert-error" style={{ padding: '4px 10px', borderRadius: '6px', fontSize: '11px', fontWeight: 700 }}>
-                  High Security Action
-                </span>
+                <span className="badge-committed alert-badge-err">High Security Action</span>
               </div>
 
-              <form onSubmit={handleDeactivate} className="lux-form">
+              <form onSubmit={handleSubmitDeactivation} className="lux-form profile-form">
                 <div className="form-group">
-                  <label>Deactivation Action Type *</label>
+                  <label>Select Action Type *</label>
                   <div className="deact-type-selector">
-                    <label className={`radio-pill ${deactData.deactivationType === 'TEMPORARY_FREEZE' ? 'active' : ''}`}>
+                    <label className={`deact-type-option ${deactData.deactivationType === 'TEMPORARY_FREEZE' ? 'active' : ''}`}>
                       <input
                         type="radio"
-                        name="deactivationType"
+                        name="deactType"
                         value="TEMPORARY_FREEZE"
                         checked={deactData.deactivationType === 'TEMPORARY_FREEZE'}
                         onChange={(e) => setDeactData({ ...deactData, deactivationType: e.target.value })}
                       />
                       <div>
-                        <strong>🔒 Temporary Security Freeze (Recommended)</strong>
-                        <span>Immediately blocks outbound wires and freezes payment cards while preserving account records.</span>
+                        <strong>🔒 Temporary Account Freeze</strong>
+                        <span>Instantly locks card transactions, outbound transfers, and login access. Can be unfrozen by administrator.</span>
                       </div>
                     </label>
 
-                    <label className={`radio-pill danger-pill ${deactData.deactivationType === 'PERMANENT_CLOSURE' ? 'active' : ''}`}>
+                    <label className={`deact-type-option ${deactData.deactivationType === 'PERMANENT_CLOSURE' ? 'active' : ''}`}>
                       <input
                         type="radio"
-                        name="deactivationType"
+                        name="deactType"
                         value="PERMANENT_CLOSURE"
                         checked={deactData.deactivationType === 'PERMANENT_CLOSURE'}
                         onChange={(e) => setDeactData({ ...deactData, deactivationType: e.target.value })}

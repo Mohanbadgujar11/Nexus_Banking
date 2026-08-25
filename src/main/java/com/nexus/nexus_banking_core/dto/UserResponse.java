@@ -23,5 +23,6 @@ public class UserResponse {
     private String address;
     private String role;
     private BigDecimal balance;
+    private Boolean hasPinSet;
     private LocalDateTime createdAt;
 }

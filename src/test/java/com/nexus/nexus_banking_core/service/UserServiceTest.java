@@ -34,6 +34,7 @@ import com.nexus.nexus_banking_core.repository.AddressRepository;
 import com.nexus.nexus_banking_core.repository.AuditLogRepository;
 import com.nexus.nexus_banking_core.repository.CardRepository;
 import com.nexus.nexus_banking_core.repository.CustomerProfileRepository;
+import com.nexus.nexus_banking_core.repository.TransactionRepository;
 import com.nexus.nexus_banking_core.repository.UserRepository;
 
 @ExtendWith(MockitoExtension.class)
@@ -61,6 +62,9 @@ class UserServiceTest {
     private AuditLogRepository auditLogRepository;
 
     @Mock
+    private TransactionRepository transactionRepository;
+
+    @Mock
     private PasswordEncoder passwordEncoder;
 
     @InjectMocks
@@ -82,7 +86,7 @@ class UserServiceTest {
                 .phoneNumber("+1 555-0199")
                 .dateOfBirth("1995-05-15")
                 .address("100 Wall St, New York, NY")
-                .role("ROLE_USER")
+                .transactionPin("123456")
                 .build();
 
         validLoginRequest = UserLoginRequest.builder()
@@ -92,6 +96,7 @@ class UserServiceTest {
 
         mockUser = User.builder()
                 .id(1L)
+                .accountNumber("NX-1002948192")
                 .username("john_doe")
                 .email("john@example.com")
                 .password("hashedPassword")
@@ -126,7 +131,7 @@ class UserServiceTest {
     void registerUser_Success() {
         when(userRepository.existsByUsername("john_doe")).thenReturn(false);
         when(userRepository.existsByEmail("john@example.com")).thenReturn(false);
-        when(passwordEncoder.encode("Password@123")).thenReturn("hashedPassword");
+        when(passwordEncoder.encode(any(CharSequence.class))).thenReturn("hashedPassword");
         when(userRepository.save(any(User.class))).thenReturn(mockUser);
         when(accountRepository.existsByAccountNumber(any())).thenReturn(false);
         when(accountRepository.save(any(Account.class))).thenReturn(mockAccount);
@@ -172,8 +177,6 @@ class UserServiceTest {
     void authenticate_Success() {
         when(userRepository.findByIdentifier("john_doe")).thenReturn(Optional.of(mockUser));
         when(passwordEncoder.matches("Password@123", "hashedPassword")).thenReturn(true);
-        when(customerProfileRepository.findByUser(mockUser)).thenReturn(Optional.of(mockProfile));
-        when(accountRepository.findPrimaryCheckingAccountByUserId(1L)).thenReturn(Optional.of(mockAccount));
 
         UserResponse response = userService.authenticate(validLoginRequest);
 

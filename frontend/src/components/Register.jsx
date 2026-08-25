@@ -10,7 +10,8 @@ function Register({ onNavigateToLogin, onRegisterSuccess }) {
     dateOfBirth: '',
     address: '',
     password: '',
-    role: 'ROLE_USER',
+    transactionPin: '',
+    confirmTransactionPin: '',
   });
 
   const [loading, setLoading] = useState(false);
@@ -22,7 +23,14 @@ function Register({ onNavigateToLogin, onRegisterSuccess }) {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
+    // Restrict PIN fields to numbers and max 6 digits
+    if (name === 'transactionPin' || name === 'confirmTransactionPin') {
+      const numericVal = value.replace(/\D/g, '').slice(0, 6);
+      setFormData((prev) => ({ ...prev, [name]: numericVal }));
+    } else {
+      setFormData((prev) => ({ ...prev, [name]: value }));
+    }
+
     if (feedback.errors && feedback.errors[name]) {
       setFeedback((prev) => ({
         ...prev,
@@ -36,13 +44,45 @@ function Register({ onNavigateToLogin, onRegisterSuccess }) {
     setLoading(true);
     setFeedback({ type: '', message: '', errors: {} });
 
+    // Validate 6-digit PIN
+    if (!formData.transactionPin || formData.transactionPin.length !== 6) {
+      setFeedback({
+        type: 'error',
+        message: 'Security PIN must be exactly 6 numeric digits.',
+        errors: { transactionPin: 'Must be 6 digits' },
+      });
+      setLoading(false);
+      return;
+    }
+
+    if (formData.transactionPin !== formData.confirmTransactionPin) {
+      setFeedback({
+        type: 'error',
+        message: 'Security PIN and confirmation PIN do not match.',
+        errors: { confirmTransactionPin: 'PIN confirmation does not match' },
+      });
+      setLoading(false);
+      return;
+    }
+
     try {
+      const payload = {
+        fullName: formData.fullName.trim(),
+        username: formData.username.trim(),
+        email: formData.email.trim(),
+        phoneNumber: formData.phoneNumber.trim(),
+        dateOfBirth: formData.dateOfBirth.trim(),
+        address: formData.address.trim(),
+        password: formData.password,
+        transactionPin: formData.transactionPin,
+      };
+
       const response = await fetch(`${API_BASE_URL}/api/users/register`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(formData),
+        body: JSON.stringify(payload),
       });
 
       const result = await response.json().catch(() => null);
@@ -50,10 +90,10 @@ function Register({ onNavigateToLogin, onRegisterSuccess }) {
       if (response.ok && result?.success) {
         setFeedback({
           type: 'success',
-          message: 'Account created successfully! Unique Account Number assigned. Redirecting to Sign In...',
+          message: 'Account created successfully with encrypted 6-digit Security PIN! Redirecting to Sign In...',
           errors: {},
         });
-        const registeredUser = result.data || formData;
+        const registeredUser = result.data || payload;
         setFormData({
           fullName: '',
           username: '',
@@ -62,10 +102,10 @@ function Register({ onNavigateToLogin, onRegisterSuccess }) {
           dateOfBirth: '',
           address: '',
           password: '',
-          role: 'ROLE_USER',
+          transactionPin: '',
+          confirmTransactionPin: '',
         });
 
-        // Transition to login screen so the user enters credentials to verify
         if (onRegisterSuccess) {
           setTimeout(() => onRegisterSuccess(registeredUser), 1000);
         }
@@ -93,10 +133,10 @@ function Register({ onNavigateToLogin, onRegisterSuccess }) {
   return (
     <div className="lux-card auth-card register-kyc-card">
       <div className="auth-card-header">
-        <div className="view-badge">New Client Onboarding</div>
+        <div className="view-badge">Client Onboarding</div>
         <h2 className="auth-title">Open Reserve Account</h2>
         <p className="auth-subtitle">
-          Complete verified banking registration to receive your unique Account Number and initialize a \$0.00 reserve.
+          Complete verified banking registration to receive your unique Account Number, initialize your \$0.00 reserve, and configure your 6-digit cryptographic security PIN.
         </p>
       </div>
 
@@ -150,7 +190,7 @@ function Register({ onNavigateToLogin, onRegisterSuccess }) {
         {/* Email & Phone */}
         <div className="form-row-dual">
           <div className="form-group">
-            <label htmlFor="reg-email">Institutional Email *</label>
+            <label htmlFor="reg-email">Institutional / Personal Email *</label>
             <input
               id="reg-email"
               name="email"
@@ -186,7 +226,7 @@ function Register({ onNavigateToLogin, onRegisterSuccess }) {
           </div>
         </div>
 
-        {/* DOB & Account Role */}
+        {/* DOB & Address */}
         <div className="form-row-dual">
           <div className="form-group">
             <label htmlFor="reg-dob">Date of Birth *</label>
@@ -206,37 +246,22 @@ function Register({ onNavigateToLogin, onRegisterSuccess }) {
           </div>
 
           <div className="form-group">
-            <label htmlFor="reg-role">Account Type & Role *</label>
-            <select
-              id="reg-role"
-              name="role"
-              value={formData.role}
+            <label htmlFor="reg-address">Residential / Corporate Address *</label>
+            <input
+              id="reg-address"
+              name="address"
+              type="text"
+              value={formData.address}
               onChange={handleChange}
+              placeholder="100 Wall Street, Suite 4200, New York, NY"
+              required
               disabled={loading}
-            >
-              <option value="ROLE_USER">Individual Client (Standard Reserve)</option>
-              <option value="ROLE_ADMIN">Banking Administrator (Admin Console)</option>
-            </select>
+              className={feedback.errors?.address ? 'input-error' : ''}
+            />
+            {feedback.errors?.address && (
+              <span className="error-text">{feedback.errors.address}</span>
+            )}
           </div>
-        </div>
-
-        {/* Address */}
-        <div className="form-group">
-          <label htmlFor="reg-address">Residential / Corporate Address *</label>
-          <input
-            id="reg-address"
-            name="address"
-            type="text"
-            value={formData.address}
-            onChange={handleChange}
-            placeholder="100 Wall Street, Suite 4200, New York, NY 10005"
-            required
-            disabled={loading}
-            className={feedback.errors?.address ? 'input-error' : ''}
-          />
-          {feedback.errors?.address && (
-            <span className="error-text">{feedback.errors.address}</span>
-          )}
         </div>
 
         {/* Master Password */}
@@ -258,9 +283,66 @@ function Register({ onNavigateToLogin, onRegisterSuccess }) {
           )}
         </div>
 
-        <button type="submit" className="lux-btn-primary full-width auth-submit-btn" disabled={loading}>
+        {/* 6-Digit Security PIN Section */}
+        <div className="form-row-dual" style={{ background: 'rgba(212, 175, 55, 0.04)', padding: '1rem', borderRadius: '12px', border: '1px solid rgba(212, 175, 55, 0.2)' }}>
+          <div className="form-group">
+            <label htmlFor="reg-pin" style={{ color: 'var(--gold)' }}>
+              🔒 6-Digit Security PIN *
+            </label>
+            <input
+              id="reg-pin"
+              name="transactionPin"
+              type="password"
+              inputMode="numeric"
+              maxLength={6}
+              value={formData.transactionPin}
+              onChange={handleChange}
+              placeholder="6 numeric digits"
+              required
+              disabled={loading}
+              className={feedback.errors?.transactionPin ? 'input-error' : ''}
+            />
+            <small style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>
+              Required to authorize transactions & card actions
+            </small>
+            {feedback.errors?.transactionPin && (
+              <span className="error-text">{feedback.errors.transactionPin}</span>
+            )}
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="reg-pin-confirm" style={{ color: 'var(--gold)' }}>
+              🔒 Confirm 6-Digit PIN *
+            </label>
+            <input
+              id="reg-pin-confirm"
+              name="confirmTransactionPin"
+              type="password"
+              inputMode="numeric"
+              maxLength={6}
+              value={formData.confirmTransactionPin}
+              onChange={handleChange}
+              placeholder="Re-enter 6 digits"
+              required
+              disabled={loading}
+              className={feedback.errors?.confirmTransactionPin ? 'input-error' : ''}
+            />
+            <small style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>
+              {formData.transactionPin && formData.confirmTransactionPin && formData.transactionPin === formData.confirmTransactionPin ? (
+                <span style={{ color: 'var(--success)' }}>✓ PINs match</span>
+              ) : (
+                'Must match the 6-digit PIN above'
+              )}
+            </small>
+            {feedback.errors?.confirmTransactionPin && (
+              <span className="error-text">{feedback.errors.confirmTransactionPin}</span>
+            )}
+          </div>
+        </div>
+
+        <button type="submit" className="lux-btn-primary full-width auth-submit-btn" disabled={loading} style={{ marginTop: '1.25rem' }}>
           {loading ? <span className="spinner"></span> : null}
-          {loading ? 'Assigning Account Number & Provisioning...' : 'Complete Registration & Open Account'}
+          {loading ? 'Assigning Account & Encrypting Credentials...' : 'Complete Registration & Open Account'}
         </button>
       </form>
 

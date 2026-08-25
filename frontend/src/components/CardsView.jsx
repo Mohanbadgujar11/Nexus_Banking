@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { API_BASE_URL } from '../config.js';
+import PinPromptModal from './PinPromptModal.jsx';
 
-function CardsView({ user }) {
+function CardsView({ user, onNavigate }) {
   const [cards, setCards] = useState([]);
   const [activeCardIndex, setActiveCardIndex] = useState(0);
   const [isFlipped, setIsFlipped] = useState(false);
@@ -9,6 +10,12 @@ function CardsView({ user }) {
   const [actionLoading, setActionLoading] = useState(false);
   const [notification, setNotification] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
+  const [pinModalConfig, setPinModalConfig] = useState({
+    isOpen: false,
+    title: '',
+    subtitle: '',
+    action: null,
+  });
 
   const fetchCards = useCallback(async () => {
     if (!user?.id) return;
@@ -44,34 +51,64 @@ function CardsView({ user }) {
     }
   };
 
-  const handleToggleFreeze = async () => {
-    if (!currentCard?.id) return;
-    setActionLoading(true);
+  const handleVerifyPin = async (pin) => {
+    if (!user?.id) return { error: 'Authentication required' };
     try {
-      const res = await fetch(`${API_BASE_URL}/api/cards/${currentCard.id}/freeze`, {
-        method: 'PATCH',
+      const res = await fetch(`${API_BASE_URL}/api/users/${user.id}/verify-pin`, {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pin }),
       });
       const data = await res.json();
-      if (res.ok && data?.success) {
-        const updatedCard = data.data;
-        setCards((prev) =>
-          prev.map((c) => (c.id === updatedCard.id ? updatedCard : c))
-        );
-        showToast(
-          updatedCard.isFrozen
-            ? `Card ${updatedCard.cardNumberMasked} is now LOCKED & FROZEN.`
-            : `Card ${updatedCard.cardNumberMasked} is now UNLOCKED & ACTIVE.`
-        );
+      if (res.ok && data?.data === true) {
+        if (pinModalConfig.action) {
+          await pinModalConfig.action();
+        }
+        setPinModalConfig({ isOpen: false, title: '', subtitle: '', action: null });
+        return { success: true };
       } else {
-        showToast(data?.message || 'Failed to update card status in core ledger.', true);
+        return { error: 'Invalid 6-digit PIN. Card security authorization failed.' };
       }
-    } catch (err) {
-      console.error('Error freezing card:', err);
-      showToast('Network error: Could not reach card authorization service.', true);
-    } finally {
-      setActionLoading(false);
+    } catch {
+      return { error: 'Could not verify PIN with security vault.' };
     }
+  };
+
+  const handleToggleFreeze = () => {
+    if (!currentCard?.id) return;
+    setPinModalConfig({
+      isOpen: true,
+      title: currentCard.isFrozen ? 'Unlock & Activate Card' : 'Freeze & Lock Card',
+      subtitle: `Please enter your 6-digit security PIN to ${currentCard.isFrozen ? 'unfreeze' : 'freeze'} card ${currentCard.cardNumberMasked}.`,
+      action: async () => {
+        setActionLoading(true);
+        try {
+          const res = await fetch(`${API_BASE_URL}/api/cards/${currentCard.id}/freeze`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+          });
+          const data = await res.json();
+          if (res.ok && data?.success) {
+            const updatedCard = data.data;
+            setCards((prev) =>
+              prev.map((c) => (c.id === updatedCard.id ? updatedCard : c))
+            );
+            showToast(
+              updatedCard.isFrozen
+                ? `Card ${updatedCard.cardNumberMasked} is now LOCKED & FROZEN.`
+                : `Card ${updatedCard.cardNumberMasked} is now UNLOCKED & ACTIVE.`
+            );
+          } else {
+            showToast(data?.message || 'Failed to update card status in core ledger.', true);
+          }
+        } catch (err) {
+          console.error('Error freezing card:', err);
+          showToast('Network error: Could not reach card authorization service.', true);
+        } finally {
+          setActionLoading(false);
+        }
+      },
+    });
   };
 
   const handleLimitChange = async (newLimit) => {
@@ -387,6 +424,18 @@ function CardsView({ user }) {
           )}
         </div>
       )}
+
+      <PinPromptModal
+        isOpen={pinModalConfig.isOpen}
+        title={pinModalConfig.title || 'Authorize Card Operation'}
+        subtitle={pinModalConfig.subtitle || 'Please verify your 6-digit security PIN to proceed.'}
+        hasPinSet={user?.hasPinSet !== false}
+        onConfirm={handleVerifyPin}
+        onClose={() => setPinModalConfig({ isOpen: false, title: '', subtitle: '', action: null })}
+        onNavigateToSetPin={() => {
+          if (onNavigate) onNavigate('profile');
+        }}
+      />
     </div>
   );
 }

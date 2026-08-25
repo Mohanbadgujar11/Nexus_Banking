@@ -13,5 +13,7 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
 
     Optional<Transaction> findByTransactionReference(String transactionReference);
 
+    List<Transaction> findByInitiatedByUserId(Long userId);
+
     List<Transaction> findAllByOrderByCreatedAtDesc();
 }

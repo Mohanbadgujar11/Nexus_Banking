@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import PinPromptModal from './PinPromptModal.jsx';
 
 function Dashboard({ user, balance, transactions, onExecuteTransfer, onNavigate, onOpenLogin, onOpenRegister }) {
   const [transferAmount, setTransferAmount] = useState('');
@@ -6,8 +7,27 @@ function Dashboard({ user, balance, transactions, onExecuteTransfer, onNavigate,
   const [transferMessage, setTransferMessage] = useState('');
   const [txFilter, setTxFilter] = useState('all'); // 'all' | 'credit' | 'debit'
   const [transferLoading, setTransferLoading] = useState(false);
+  const [isPinModalOpen, setIsPinModalOpen] = useState(false);
+  const [isBalanceMasked, setIsBalanceMasked] = useState(false);
 
-  const handleTransfer = async (e) => {
+  useEffect(() => {
+    const loadSettings = () => {
+      try {
+        const saved = localStorage.getItem('nexus_user_settings');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          setIsBalanceMasked(!!parsed.maskBalanceOnDashboard);
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    };
+    loadSettings();
+    window.addEventListener('nexus_settings_changed', loadSettings);
+    return () => window.removeEventListener('nexus_settings_changed', loadSettings);
+  }, []);
+
+  const handleTransferSubmit = (e) => {
     e.preventDefault();
     if (!user) {
       if (onOpenLogin) onOpenLogin();
@@ -24,20 +44,38 @@ function Dashboard({ user, balance, transactions, onExecuteTransfer, onNavigate,
       return;
     }
 
+    if (!transferRecipient.trim()) {
+      setTransferMessage('Please enter a beneficiary account number or username.');
+      return;
+    }
+
+    setIsPinModalOpen(true);
+  };
+
+  const handlePinConfirm = async (pin) => {
+    const amt = parseFloat(transferAmount);
     setTransferLoading(true);
     setTransferMessage('');
 
     try {
-      const result = await onExecuteTransfer(amt, transferRecipient.trim(), `Instant Transfer to ${transferRecipient.trim()}`);
+      const result = await onExecuteTransfer(
+        amt,
+        transferRecipient.trim(),
+        `Instant Transfer to ${transferRecipient.trim()}`,
+        pin
+      );
+
       if (result?.success) {
         setTransferMessage(`Successfully executed $${amt.toFixed(2)} transfer to ${transferRecipient}!`);
         setTransferAmount('');
         setTransferRecipient('');
+        setIsPinModalOpen(false);
+        return { success: true };
       } else {
-        setTransferMessage(result?.message || 'Transfer failed.');
+        return { error: result?.message || 'Transfer authorization failed.' };
       }
     } catch {
-      setTransferMessage('Error connecting to transfer service.');
+      return { error: 'Error connecting to transfer service.' };
     } finally {
       setTransferLoading(false);
       setTimeout(() => setTransferMessage(''), 5000);
@@ -68,15 +106,17 @@ function Dashboard({ user, balance, transactions, onExecuteTransfer, onNavigate,
         <div className="hero-content-left">
           <div className="hero-badge-row">
             <span className="hero-status-pill">
-              {user ? (user.role === 'ROLE_ADMIN' ? '🛡 Core Bank Administrator' : 'Private Reserve Client') : 'Institutional Core Gateway'}
+              <span className="live-dot"></span> Core Online • 24/7 RTGS
             </span>
-            <span className="hero-security-pill">🔒 Double-Entry Verified</span>
+            <span className="hero-tier-tag">
+              {user?.role === 'ROLE_ADMIN' ? 'INSTITUTIONAL ADMIN' : 'PRIVATE RESERVE'}
+            </span>
           </div>
 
           <h1 className="hero-heading">
-            Hello {user?.fullName ? `${user.fullName}, ` : user?.username ? `${user.username}, ` : ''}Welcome to the Nexus Bank!
+            {user ? `Welcome back, ${user.fullName || user.username}` : 'Private Banking Engineered for Sovereign Capital'}
           </h1>
-          <p className="hero-description">
+          <p className="hero-subtext">
             {user
               ? `Your unique account (${userAccNumber}) is active. Manage your private reserves, execute real-time transfers, and inspect verified transaction receipts.`
               : 'The next-generation core banking infrastructure designed for high-velocity capital, private reserves, and cryptographic security.'}
@@ -105,11 +145,24 @@ function Dashboard({ user, balance, transactions, onExecuteTransfer, onNavigate,
 
         {/* Hero Right: Net Worth Widget */}
         <div className="hero-networth-card">
-          <span className="networth-lbl">CURRENT RESERVE BALANCE</span>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span className="networth-lbl">CURRENT RESERVE BALANCE</span>
+            <button
+              type="button"
+              className="privacy-toggle-btn"
+              onClick={() => setIsBalanceMasked(!isBalanceMasked)}
+              title={isBalanceMasked ? 'Show Balance' : 'Hide Balance'}
+              style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.85rem' }}
+            >
+              {isBalanceMasked ? '👁️ Show' : '🔒 Mask'}
+            </button>
+          </div>
           <div className="networth-amount-row">
             <span className="networth-currency">$</span>
             <span className="networth-val">
-              {displayBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              {isBalanceMasked
+                ? '••••••••'
+                : displayBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </span>
           </div>
           <div className="networth-meta-row">
@@ -162,25 +215,26 @@ function Dashboard({ user, balance, transactions, onExecuteTransfer, onNavigate,
         </button>
       </div>
 
-      {/* Dashboard Main Grid */}
-      <div className="dashboard-grid-layout">
-        {/* Left Column: Quick Transfer Form */}
-        <div className="lux-card">
+      {/* Main Dual Grid: Quick Transfer + Card Preview */}
+      <div className="dash-dual-grid">
+        {/* Left Column: Quick Transfer Card */}
+        <div className="lux-card quick-transfer-card">
           <div className="lux-card-header">
             <div>
-              <h3>Instant Settlement Terminal</h3>
-              <p>Transfer funds to any Nexus Account Number or Username</p>
+              <h3>Instant Capital Dispatch</h3>
+              <p>Transfer USD zero-fee to any verified Nexus account number or username.</p>
             </div>
-            <span className="zero-fee-pill">Real-Time Clearing</span>
+            <span className="badge-committed">Zero Fee</span>
           </div>
 
           {transferMessage && (
             <div className={`alert-banner ${transferMessage.includes('Successfully') ? 'alert-success' : 'alert-error'}`}>
+              {transferMessage.includes('Successfully') ? '✓ ' : '⚠ '}
               <span>{transferMessage}</span>
             </div>
           )}
 
-          <form onSubmit={handleTransfer} className="lux-form">
+          <form onSubmit={handleTransferSubmit} className="lux-form">
             <div className="form-group">
               <label htmlFor="dash-recipient">Beneficiary Account Number or Username *</label>
               <input
@@ -210,7 +264,7 @@ function Dashboard({ user, balance, transactions, onExecuteTransfer, onNavigate,
             </div>
 
             <button type="submit" className="lux-btn-primary full-width" disabled={transferLoading}>
-              {transferLoading ? 'Transmitting to Core Ledger...' : user ? 'Execute Real-Time Transfer' : 'Sign In to Execute Transfer'}
+              {transferLoading ? 'Transmitting to Core Ledger...' : user ? 'Authorize & Execute Transfer' : 'Sign In to Execute Transfer'}
             </button>
           </form>
         </div>
@@ -239,111 +293,133 @@ function Dashboard({ user, balance, transactions, onExecuteTransfer, onNavigate,
             <div className="pmc-bottom">
               <div>
                 <span className="pmc-lbl">CARDHOLDER</span>
-                <span className="pmc-val">{user?.fullName ? user.fullName.toUpperCase() : user?.username ? user.username.toUpperCase() : 'ALEX STONE'}</span>
+                <span className="pmc-name">{(user?.fullName || user?.username || 'VALUED CLIENT').toUpperCase()}</span>
               </div>
               <div>
                 <span className="pmc-lbl">EXPIRES</span>
-                <span className="pmc-val">08/31</span>
+                <span className="pmc-exp">08/31</span>
               </div>
-              <span className="pmc-type">NEXUS</span>
             </div>
+          </div>
+
+          <div className="mini-card-actions">
+            <span>Tap card to configure spending limits & instant biometric controls →</span>
           </div>
         </div>
       </div>
 
-      {/* Real-Time Transaction Ledger */}
+      {/* Full-Width Verified Transaction Ledger Card */}
       <div className="lux-card ledger-card">
-        <div className="ledger-header-row">
+        <div className="lux-card-header ledger-header">
           <div>
-            <h3>Real-Time Account Ledger</h3>
-            <p>Live transactions committed to the double-entry reserve ledger</p>
+            <h3>Immutable Transaction History</h3>
+            <p>Real-time settled ledger with SHA-256 cryptographic proof</p>
           </div>
 
-          <div className="tx-filter-group">
+          <div className="tx-filter-pills">
             <button
               type="button"
-              className={`tx-filter-btn ${txFilter === 'all' ? 'active' : ''}`}
+              className={`filter-pill ${txFilter === 'all' ? 'active' : ''}`}
               onClick={() => setTxFilter('all')}
             >
-              All ({filteredTransactions.length})
+              All Records
             </button>
             <button
               type="button"
-              className={`tx-filter-btn ${txFilter === 'credit' ? 'active' : ''}`}
+              className={`filter-pill ${txFilter === 'credit' ? 'active' : ''}`}
               onClick={() => setTxFilter('credit')}
             >
-              ↓ Inflow
+              Deposits / Inbound
             </button>
             <button
               type="button"
-              className={`tx-filter-btn ${txFilter === 'debit' ? 'active' : ''}`}
+              className={`filter-pill ${txFilter === 'debit' ? 'active' : ''}`}
               onClick={() => setTxFilter('debit')}
             >
-              ↑ Outflow
+              Wires / Outbound
             </button>
           </div>
         </div>
 
-        <div className="tx-table-container">
-          <table className="lux-table">
-            <thead>
-              <tr>
-                <th>Type</th>
-                <th>Description / Reference</th>
-                <th>Counterparty</th>
-                <th>Timestamp</th>
-                <th>Status</th>
-                <th style={{ textAlign: 'right' }}>Amount</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredTransactions.length === 0 ? (
+        {filteredTransactions.length === 0 ? (
+          <div className="ledger-empty-state">
+            <div className="empty-icon">🏛</div>
+            <h4>No Ledger Records Found</h4>
+            <p>
+              {user
+                ? 'Your account is ready. Fund your account via admin deposit or execute your first outbound wire transfer.'
+                : 'Sign in to review your verified transaction history.'}
+            </p>
+          </div>
+        ) : (
+          <div className="table-responsive">
+            <table className="lux-table">
+              <thead>
                 <tr>
-                  <td colSpan="6" style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--text-muted)' }}>
-                    <div style={{ fontSize: '24px', marginBottom: '8px' }}>📂</div>
-                    <strong>No transactions yet.</strong>
-                    <div style={{ fontSize: '12.5px', marginTop: '4px' }}>
-                      {user?.role === 'ROLE_ADMIN'
-                        ? 'Use the Admin Console to deposit funds into client accounts.'
-                        : 'Deposit funds or receive an instant transfer to populate your ledger.'}
-                    </div>
-                  </td>
+                  <th>Timestamp</th>
+                  <th>Description & Routing</th>
+                  <th>Channel</th>
+                  <th>Ledger Status</th>
+                  <th className="text-right">Amount</th>
                 </tr>
-              ) : (
-                filteredTransactions.map((tx) => {
-                  const isCredit = tx.type === 'DEPOSIT' || tx.type === 'TRANSFER_CREDIT' || tx.type === 'credit';
+              </thead>
+              <tbody>
+                {filteredTransactions.map((tx) => {
+                  const isDebit = tx.type === 'TRANSFER_DEBIT' || tx.type === 'debit';
+                  const dateStr = tx.createdAt
+                    ? new Date(tx.createdAt).toLocaleDateString('en-US', {
+                        month: 'short',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })
+                    : 'Recent';
+
                   return (
-                    <tr key={tx.id}>
+                    <tr key={tx.id || tx.transactionReference || Math.random()}>
+                      <td className="date-cell">{dateStr}</td>
                       <td>
-                        <span className={`lux-tx-badge ${isCredit ? 'credit' : 'debit'}`}>
-                          {isCredit ? '↓ Credit' : '↑ Debit'}
+                        <div className="tx-desc-title">{tx.description || tx.memo || 'Core Transaction'}</div>
+                        <div className="tx-ref-code">{tx.transactionReference || 'REF-NX-PENDING'}</div>
+                      </td>
+                      <td>
+                        <span className="channel-badge">{tx.channel || 'WEB'}</span>
+                      </td>
+                      <td>
+                        <span className="status-badge settled">
+                          <span className="status-dot"></span>
+                          {tx.status || 'SETTLED'}
                         </span>
                       </td>
-                      <td>
-                        <strong>{tx.description || tx.title || 'P2P Transfer'}</strong>
-                        <div className="tx-time-col">{tx.transactionReference || `TXN-${tx.id}`}</div>
-                      </td>
-                      <td>
-                        <code>{isCredit ? (tx.senderAccountNumber || 'Treasury Deposit') : tx.receiverAccountNumber}</code>
-                      </td>
-                      <td className="tx-time-col">
-                        {tx.createdAt ? new Date(tx.createdAt).toLocaleString() : tx.date || 'Recent'}
-                      </td>
-                      <td><span className="badge-committed">Settled</span></td>
-                      <td style={{ textAlign: 'right' }}>
-                        <span className={`tx-amount-text ${isCredit ? 'credit' : 'debit'}`}>
-                          {isCredit ? '+' : '-'}
-                          ${(parseFloat(tx.amount) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </span>
+                      <td className={`text-right amount-cell ${isDebit ? 'amount-debit' : 'amount-credit'}`}>
+                        {isDebit ? '-' : '+'}
+                        ${(parseFloat(tx.amount || tx.totalAmount) || 0).toLocaleString('en-US', {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })}
                       </td>
                     </tr>
                   );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
+
+      <PinPromptModal
+        isOpen={isPinModalOpen}
+        title="Authorize Quick Capital Dispatch"
+        subtitle="Please enter your 6-digit cryptographic PIN to authorize this transfer."
+        amount={transferAmount}
+        recipient={transferRecipient}
+        hasPinSet={user?.hasPinSet !== false}
+        onConfirm={handlePinConfirm}
+        onClose={() => setIsPinModalOpen(false)}
+        onNavigateToSetPin={() => {
+          if (onNavigate) onNavigate('profile');
+        }}
+      />
     </div>
   );
 }

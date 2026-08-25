@@ -4,6 +4,7 @@ import java.util.List;
 
 import com.nexus.nexus_banking_core.dto.ChangePasswordRequest;
 import com.nexus.nexus_banking_core.dto.DeactivationRequest;
+import com.nexus.nexus_banking_core.dto.SetPinRequest;
 import com.nexus.nexus_banking_core.dto.UserLoginRequest;
 import com.nexus.nexus_banking_core.dto.UserRegisterRequest;
 import com.nexus.nexus_banking_core.dto.UserResponse;
@@ -26,6 +27,10 @@ public interface UserService {
     UserResponse updateUser(Long id, UserUpdateRequest request);
 
     void changePassword(Long id, ChangePasswordRequest request);
+
+    void setOrUpdatePin(Long id, SetPinRequest request);
+
+    boolean verifyPin(Long id, String pin);
 
     void submitDeactivationRequest(Long id, DeactivationRequest request);
 

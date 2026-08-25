@@ -11,6 +11,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.nexus.nexus_banking_core.dto.ChangePasswordRequest;
 import com.nexus.nexus_banking_core.dto.DeactivationRequest;
+import com.nexus.nexus_banking_core.dto.SetPinRequest;
 import com.nexus.nexus_banking_core.dto.UserLoginRequest;
 import com.nexus.nexus_banking_core.dto.UserRegisterRequest;
 import com.nexus.nexus_banking_core.dto.UserResponse;
@@ -30,6 +31,7 @@ import com.nexus.nexus_banking_core.repository.AddressRepository;
 import com.nexus.nexus_banking_core.repository.AuditLogRepository;
 import com.nexus.nexus_banking_core.repository.CardRepository;
 import com.nexus.nexus_banking_core.repository.CustomerProfileRepository;
+import com.nexus.nexus_banking_core.repository.TransactionRepository;
 import com.nexus.nexus_banking_core.repository.UserRepository;
 
 import jakarta.annotation.PostConstruct;
@@ -48,6 +50,7 @@ public class UserServiceImpl implements UserService {
     private final AccountMetadataRepository accountMetadataRepository;
     private final CardRepository cardRepository;
     private final AuditLogRepository auditLogRepository;
+    private final TransactionRepository transactionRepository;
     private final PasswordEncoder passwordEncoder;
     private final SecureRandom secureRandom = new SecureRandom();
 
@@ -61,6 +64,7 @@ public class UserServiceImpl implements UserService {
                 .username("admin")
                 .email("admin@nexus.io")
                 .password(passwordEncoder.encode("Admin@123456"))
+                .transactionPinHash(passwordEncoder.encode("123456"))
                 .phoneNumber("+1 800-NEXUS-01")
                 .dateOfBirth("1990-01-01")
                 .address("100 Wall Street, 42nd Floor, New York, NY")
@@ -128,11 +132,14 @@ public class UserServiceImpl implements UserService {
             throw new UserAlreadyExistsException("Email '" + request.getEmail() + "' is already registered");
         }
 
-        String assignedRole = (request.getRole() != null && request.getRole().equalsIgnoreCase("ROLE_ADMIN"))
-            ? "ROLE_ADMIN"
-            : "ROLE_USER";
+        // Enforce ROLE_USER on client registration
+        String assignedRole = "ROLE_USER";
 
         String uniqueAccountNumber = generateUniqueAccountNumber();
+
+        String pinHash = (request.getTransactionPin() != null && !request.getTransactionPin().isBlank())
+            ? passwordEncoder.encode(request.getTransactionPin().trim())
+            : null;
 
         // 1. Create Core User
         User user = User.builder()
@@ -141,6 +148,7 @@ public class UserServiceImpl implements UserService {
             .username(request.getUsername().trim())
             .email(request.getEmail().trim().toLowerCase())
             .password(passwordEncoder.encode(request.getPassword()))
+            .transactionPinHash(pinHash)
             .phoneNumber(request.getPhoneNumber() != null ? request.getPhoneNumber().trim() : "")
             .dateOfBirth(request.getDateOfBirth() != null ? request.getDateOfBirth().trim() : "")
             .address(request.getAddress() != null ? request.getAddress().trim() : "")
@@ -242,28 +250,41 @@ public class UserServiceImpl implements UserService {
     public UserResponse authenticate(UserLoginRequest request) {
         String identifier = request.getIdentifier().trim();
         User user = userRepository.findByIdentifier(identifier)
-            .orElseThrow(() -> new InvalidCredentialsException("Invalid username/email or password"));
+            .orElseThrow(() -> new InvalidCredentialsException("Invalid username, email, or account number"));
 
-        if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
-            throw new InvalidCredentialsException("Invalid username/email or password");
+        if (Boolean.TRUE.equals(user.getIsDeleted())) {
+            throw new InvalidCredentialsException("Account has been closed or removed");
         }
 
-        CustomerProfile profile = customerProfileRepository.findByUser(user).orElse(null);
-        Address address = addressRepository.findByUserIdAndIsPrimaryTrue(user.getId()).orElse(null);
-        Account primaryAccount = accountRepository.findPrimaryCheckingAccountByUserId(user.getId()).orElse(null);
+        if ("FROZEN".equalsIgnoreCase(user.getStatus()) || "SUSPENDED".equalsIgnoreCase(user.getStatus())) {
+            throw new InvalidCredentialsException("Account access is currently locked. Contact administration to unlock.");
+        }
 
-        return buildUserResponse(user, profile, address, primaryAccount);
+        if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
+            throw new InvalidCredentialsException("Invalid credentials provided");
+        }
+
+        // Audit Log
+        AuditLog auditLog = AuditLog.builder()
+            .actorUser(user)
+            .action("USER_AUTHENTICATED")
+            .resourceType("USERS")
+            .resourceId(String.valueOf(user.getId()))
+            .ipAddress("127.0.0.1")
+            .sha256Fingerprint("SHA256-AUTH-" + user.getId() + "-" + System.currentTimeMillis())
+            .build();
+        auditLogRepository.save(auditLog);
+
+        log.info("Authenticated user {} ({})", user.getUsername(), user.getRole());
+        return mapToUserResponse(user);
     }
 
     @Override
     @Transactional(readOnly = true)
     public UserResponse getUserByAccountNumber(String accountNumber) {
-        Account account = accountRepository.findByAccountNumber(accountNumber.trim())
+        User user = userRepository.findByAccountNumber(accountNumber)
             .orElseThrow(() -> new InvalidCredentialsException("Account with number '" + accountNumber + "' was not found"));
-        User user = account.getUser();
-        CustomerProfile profile = customerProfileRepository.findByUser(user).orElse(null);
-        Address address = addressRepository.findByUserIdAndIsPrimaryTrue(user.getId()).orElse(null);
-        return buildUserResponse(user, profile, address, account);
+        return mapToUserResponse(user);
     }
 
     @Override
@@ -271,22 +292,15 @@ public class UserServiceImpl implements UserService {
     public UserResponse getUserById(Long id) {
         User user = userRepository.findById(id)
             .orElseThrow(() -> new InvalidCredentialsException("User with ID '" + id + "' was not found"));
-        CustomerProfile profile = customerProfileRepository.findByUser(user).orElse(null);
-        Address address = addressRepository.findByUserIdAndIsPrimaryTrue(user.getId()).orElse(null);
-        Account primaryAccount = accountRepository.findPrimaryCheckingAccountByUserId(user.getId()).orElse(null);
-        return buildUserResponse(user, profile, address, primaryAccount);
+        return mapToUserResponse(user);
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<UserResponse> getAllUsers() {
-        return userRepository.findByIsDeletedFalse().stream()
-            .map((user) -> {
-                CustomerProfile profile = customerProfileRepository.findByUser(user).orElse(null);
-                Address address = addressRepository.findByUserIdAndIsPrimaryTrue(user.getId()).orElse(null);
-                Account primaryAccount = accountRepository.findPrimaryCheckingAccountByUserId(user.getId()).orElse(null);
-                return buildUserResponse(user, profile, address, primaryAccount);
-            })
+        return userRepository.findAll().stream()
+            .filter(u -> !Boolean.TRUE.equals(u.getIsDeleted()))
+            .map(this::mapToUserResponse)
             .collect(Collectors.toList());
     }
 
@@ -297,12 +311,8 @@ public class UserServiceImpl implements UserService {
             return getAllUsers();
         }
         return userRepository.searchUsers(query.trim()).stream()
-            .map((user) -> {
-                CustomerProfile profile = customerProfileRepository.findByUser(user).orElse(null);
-                Address address = addressRepository.findByUserIdAndIsPrimaryTrue(user.getId()).orElse(null);
-                Account primaryAccount = accountRepository.findPrimaryCheckingAccountByUserId(user.getId()).orElse(null);
-                return buildUserResponse(user, profile, address, primaryAccount);
-            })
+            .filter(u -> !Boolean.TRUE.equals(u.getIsDeleted()))
+            .map(this::mapToUserResponse)
             .collect(Collectors.toList());
     }
 
@@ -312,36 +322,58 @@ public class UserServiceImpl implements UserService {
         User user = userRepository.findById(id)
             .orElseThrow(() -> new InvalidCredentialsException("User with ID '" + id + "' was not found"));
 
-        if (!user.getEmail().equalsIgnoreCase(request.getEmail()) && userRepository.existsByEmail(request.getEmail())) {
-            throw new UserAlreadyExistsException("Email '" + request.getEmail() + "' is already in use by another account");
+        if (request.getFullName() != null && !request.getFullName().isBlank()) {
+            user.setFullName(request.getFullName().trim());
         }
-
-        user.setEmail(request.getEmail().trim().toLowerCase());
+        if (request.getEmail() != null && !request.getEmail().isBlank()) {
+            user.setEmail(request.getEmail().trim().toLowerCase());
+        }
+        if (request.getPhoneNumber() != null) {
+            user.setPhoneNumber(request.getPhoneNumber().trim());
+        }
+        if (request.getAddress() != null) {
+            user.setAddress(request.getAddress().trim());
+        }
         if (request.getRole() != null && !request.getRole().isBlank()) {
-            user.setRole(request.getRole().trim());
-        }
-        user.setFullName(request.getFullName().trim());
-        if (request.getPhoneNumber() != null) user.setPhoneNumber(request.getPhoneNumber().trim());
-        if (request.getAddress() != null) user.setAddress(request.getAddress().trim());
-        User updated = userRepository.save(user);
-
-        CustomerProfile profile = customerProfileRepository.findByUser(user).orElse(null);
-        if (profile != null) {
-            String[] nameParts = request.getFullName().trim().split("\\s+", 2);
-            profile.setFirstName(nameParts[0]);
-            profile.setLastName(nameParts.length > 1 ? nameParts[1] : nameParts[0]);
-            if (request.getPhoneNumber() != null) profile.setPhoneNumber(request.getPhoneNumber().trim());
-            customerProfileRepository.save(profile);
+            user.setRole(request.getRole());
         }
 
-        Address address = addressRepository.findByUserIdAndIsPrimaryTrue(user.getId()).orElse(null);
-        if (address != null && request.getAddress() != null) {
-            address.setAddressLine1(request.getAddress().trim());
-            addressRepository.save(address);
-        }
+        User updatedUser = userRepository.save(user);
 
-        Account primaryAccount = accountRepository.findPrimaryCheckingAccountByUserId(user.getId()).orElse(null);
-        return buildUserResponse(updated, profile, address, primaryAccount);
+        // Sync CustomerProfile
+        customerProfileRepository.findByUserId(id).ifPresent((p) -> {
+            if (request.getFullName() != null && !request.getFullName().isBlank()) {
+                String[] parts = request.getFullName().trim().split("\\s+", 2);
+                p.setFirstName(parts[0]);
+                p.setLastName(parts.length > 1 ? parts[1] : parts[0]);
+            }
+            if (request.getPhoneNumber() != null) {
+                p.setPhoneNumber(request.getPhoneNumber().trim());
+            }
+            customerProfileRepository.save(p);
+        });
+
+        // Sync Address
+        addressRepository.findByUserIdAndIsPrimaryTrue(id).ifPresent((addr) -> {
+            if (request.getAddress() != null) {
+                addr.setAddressLine1(request.getAddress().trim());
+                addressRepository.save(addr);
+            }
+        });
+
+        // Audit Log
+        AuditLog auditLog = AuditLog.builder()
+            .actorUser(updatedUser)
+            .action("USER_PROFILE_UPDATED")
+            .resourceType("USERS")
+            .resourceId(String.valueOf(updatedUser.getId()))
+            .ipAddress("127.0.0.1")
+            .sha256Fingerprint("SHA256-UPD-" + updatedUser.getId() + "-" + System.currentTimeMillis())
+            .build();
+        auditLogRepository.save(auditLog);
+
+        log.info("Updated profile for user ID {}", id);
+        return mapToUserResponse(updatedUser);
     }
 
     @Override
@@ -369,6 +401,63 @@ public class UserServiceImpl implements UserService {
         auditLogRepository.save(auditLog);
 
         log.info("Password changed successfully for user ID {}", id);
+    }
+
+    @Override
+    @Transactional
+    public void setOrUpdatePin(Long id, SetPinRequest request) {
+        User user = userRepository.findById(id)
+            .orElseThrow(() -> new InvalidCredentialsException("User with ID '" + id + "' was not found"));
+
+        if (user.getTransactionPinHash() != null && !user.getTransactionPinHash().isBlank()) {
+            // Updating existing PIN: verify current PIN or password
+            boolean verified = false;
+            if (request.getCurrentPin() != null && !request.getCurrentPin().isBlank()) {
+                verified = passwordEncoder.matches(request.getCurrentPin().trim(), user.getTransactionPinHash());
+            } else if (request.getPassword() != null && !request.getPassword().isBlank()) {
+                verified = passwordEncoder.matches(request.getPassword(), user.getPassword());
+            }
+
+            if (!verified) {
+                throw new InvalidCredentialsException("Verification failed. Please enter your correct current PIN or Master Password.");
+            }
+        } else {
+            // First-time PIN setup: verify password if provided
+            if (request.getPassword() != null && !request.getPassword().isBlank()) {
+                if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
+                    throw new InvalidCredentialsException("Master password verification failed.");
+                }
+            }
+        }
+
+        user.setTransactionPinHash(passwordEncoder.encode(request.getNewPin().trim()));
+        userRepository.save(user);
+
+        // Audit Log
+        AuditLog auditLog = AuditLog.builder()
+            .actorUser(user)
+            .action("SECURITY_PIN_CONFIGURED")
+            .resourceType("USERS")
+            .resourceId(String.valueOf(user.getId()))
+            .ipAddress("127.0.0.1")
+            .sha256Fingerprint("SHA256-PIN-" + user.getId() + "-" + System.currentTimeMillis())
+            .build();
+        auditLogRepository.save(auditLog);
+
+        log.info("6-digit security PIN configured successfully for user ID {}", id);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public boolean verifyPin(Long id, String pin) {
+        if (pin == null || pin.isBlank()) {
+            return false;
+        }
+        User user = userRepository.findById(id).orElse(null);
+        if (user == null || user.getTransactionPinHash() == null) {
+            return false;
+        }
+        return passwordEncoder.matches(pin.trim(), user.getTransactionPinHash());
     }
 
     @Override
@@ -408,17 +497,36 @@ public class UserServiceImpl implements UserService {
     public void deleteUser(Long id) {
         User user = userRepository.findById(id)
             .orElseThrow(() -> new InvalidCredentialsException("User with ID '" + id + "' was not found"));
-        user.setIsDeleted(true);
-        user.setStatus("CLOSED");
-        userRepository.save(user);
 
-        accountRepository.findPrimaryCheckingAccountByUserId(id).ifPresent((acc) -> {
-            acc.setIsDeleted(true);
-            acc.setStatus("CLOSED");
-            accountRepository.save(acc);
+        // 1. Disassociate Audit Logs
+        auditLogRepository.findByActorUserIdOrderByCreatedAtDesc(id).forEach(logEntry -> {
+            logEntry.setActorUser(null);
+            auditLogRepository.save(logEntry);
         });
 
-        log.info("Soft deleted user with ID {}", id);
+        // 2. Disassociate Transactions
+        transactionRepository.findByInitiatedByUserId(id).forEach(tx -> {
+            tx.setInitiatedByUser(null);
+            transactionRepository.save(tx);
+        });
+
+        // 3. Delete Cards
+        cardRepository.findByUserId(id).forEach(cardRepository::delete);
+
+        // 4. Delete Accounts and Account Metadata
+        accountRepository.findByUserId(id).forEach(acc -> {
+            accountMetadataRepository.findByAccountId(acc.getId()).ifPresent(accountMetadataRepository::delete);
+            accountRepository.delete(acc);
+        });
+
+        // 5. Delete Customer Profile and Address
+        addressRepository.findByUserId(id).forEach(addressRepository::delete);
+        customerProfileRepository.findByUserId(id).ifPresent(customerProfileRepository::delete);
+
+        // 6. Hard Delete User Record from Database
+        userRepository.delete(user);
+
+        log.info("Hard deleted user with ID {}, completely purged database records and freed username {}", id, user.getUsername());
     }
 
     private String generateUniqueAccountNumber() {
@@ -430,29 +538,36 @@ public class UserServiceImpl implements UserService {
         return accountNumber;
     }
 
-    private UserResponse buildUserResponse(User user, CustomerProfile profile, Address address, Account account) {
-        String fullName = profile != null && profile.getFirstName() != null
-            ? profile.getFirstName() + " " + profile.getLastName()
-            : user.getFullName() != null ? user.getFullName() : user.getUsername();
-        String phone = profile != null ? profile.getPhoneNumber() : user.getPhoneNumber() != null ? user.getPhoneNumber() : "";
-        String dob = profile != null ? profile.getDateOfBirth() : user.getDateOfBirth() != null ? user.getDateOfBirth() : "";
-        String addr = address != null && address.getAddressLine1() != null
-            ? address.getAddressLine1() + ", " + address.getCity() + ", " + address.getStateProvince()
-            : user.getAddress() != null ? user.getAddress() : "";
-        String accNum = account != null ? account.getAccountNumber() : user.getAccountNumber() != null ? user.getAccountNumber() : "NX-PENDING";
-        BigDecimal bal = account != null ? account.getBalance() : user.getBalance() != null ? user.getBalance() : BigDecimal.ZERO;
-
+    private UserResponse mapToUserResponse(User user) {
         return UserResponse.builder()
             .id(user.getId())
-            .accountNumber(accNum)
-            .fullName(fullName)
+            .accountNumber(user.getAccountNumber())
+            .fullName(user.getFullName())
             .username(user.getUsername())
             .email(user.getEmail())
-            .phoneNumber(phone)
-            .dateOfBirth(dob)
-            .address(addr)
+            .phoneNumber(user.getPhoneNumber())
+            .dateOfBirth(user.getDateOfBirth())
+            .address(user.getAddress())
             .role(user.getRole())
-            .balance(bal)
+            .balance(user.getBalance())
+            .hasPinSet(user.getTransactionPinHash() != null && !user.getTransactionPinHash().isBlank())
+            .createdAt(user.getCreatedAt())
+            .build();
+    }
+
+    private UserResponse buildUserResponse(User user, CustomerProfile profile, Address address, Account account) {
+        return UserResponse.builder()
+            .id(user.getId())
+            .accountNumber(account != null ? account.getAccountNumber() : user.getAccountNumber())
+            .fullName(user.getFullName())
+            .username(user.getUsername())
+            .email(user.getEmail())
+            .phoneNumber(profile != null ? profile.getPhoneNumber() : user.getPhoneNumber())
+            .dateOfBirth(profile != null ? profile.getDateOfBirth() : user.getDateOfBirth())
+            .address(address != null ? address.getAddressLine1() : user.getAddress())
+            .role(user.getRole())
+            .balance(account != null ? account.getBalance() : user.getBalance())
+            .hasPinSet(user.getTransactionPinHash() != null && !user.getTransactionPinHash().isBlank())
             .createdAt(user.getCreatedAt())
             .build();
     }

@@ -27,5 +27,7 @@ public class TransferRequest {
     private BigDecimal amount;
 
     private String memo;
+
+    private String pin;
 }
 

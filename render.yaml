@@ -33,3 +33,4 @@ services:
           type: web
           name: nexus-banking-core-api
           property: host
+

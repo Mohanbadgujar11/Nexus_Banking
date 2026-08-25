@@ -70,6 +70,9 @@ public class User {
     @Builder.Default
     private Boolean isDeleted = false;
 
+    @Column(name = "transaction_pin_hash", length = 255)
+    private String transactionPinHash;
+
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
 

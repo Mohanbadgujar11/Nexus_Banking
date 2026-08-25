@@ -2,6 +2,7 @@ package com.nexus.nexus_banking_core.dto;
 
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -39,5 +40,6 @@ public class UserRegisterRequest {
     @NotBlank(message = "Address is required")
     private String address;
 
-    private String role; // "ROLE_USER" or "ROLE_ADMIN"
+    @Pattern(regexp = "^\\d{6}$", message = "Security PIN must be exactly 6 numeric digits")
+    private String transactionPin;
 }

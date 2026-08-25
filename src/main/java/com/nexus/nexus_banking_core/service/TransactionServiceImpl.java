@@ -5,6 +5,7 @@ import java.security.SecureRandom;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -16,6 +17,7 @@ import com.nexus.nexus_banking_core.model.Account;
 import com.nexus.nexus_banking_core.model.AuditLog;
 import com.nexus.nexus_banking_core.model.LedgerEntry;
 import com.nexus.nexus_banking_core.model.Transaction;
+import com.nexus.nexus_banking_core.model.User;
 import com.nexus.nexus_banking_core.repository.AccountRepository;
 import com.nexus.nexus_banking_core.repository.AuditLogRepository;
 import com.nexus.nexus_banking_core.repository.LedgerEntryRepository;
@@ -35,6 +37,7 @@ public class TransactionServiceImpl implements TransactionService {
     private final TransactionRepository transactionRepository;
     private final LedgerEntryRepository ledgerEntryRepository;
     private final AuditLogRepository auditLogRepository;
+    private final PasswordEncoder passwordEncoder;
     private final SecureRandom secureRandom = new SecureRandom();
 
     @Override
@@ -47,6 +50,21 @@ public class TransactionServiceImpl implements TransactionService {
 
         Account senderAccount = accountRepository.findByAccountNumber(request.getSenderAccountNumber().trim())
             .orElseThrow(() -> new InvalidCredentialsException("Sender account '" + request.getSenderAccountNumber() + "' not found"));
+
+        // 0. Validate Sender 6-Digit Security PIN
+        User senderUser = senderAccount.getUser();
+        if (senderUser != null) {
+            if (senderUser.getTransactionPinHash() != null && !senderUser.getTransactionPinHash().isBlank()) {
+                if (request.getPin() == null || request.getPin().isBlank()) {
+                    throw new InvalidCredentialsException("6-digit security PIN is required for transfer authorization");
+                }
+                if (!passwordEncoder.matches(request.getPin().trim(), senderUser.getTransactionPinHash())) {
+                    throw new InvalidCredentialsException("Invalid 6-digit security PIN. Transfer authorization failed.");
+                }
+            } else {
+                throw new InvalidCredentialsException("Security PIN required. Please configure your 6-digit security PIN in your Profile before initiating transfers.");
+            }
+        }
 
         // Beneficiary lookup: check account number or username
         String receiverIdentifier = request.getReceiverAccountNumber().trim();

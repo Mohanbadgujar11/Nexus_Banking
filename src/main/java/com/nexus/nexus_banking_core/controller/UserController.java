@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.nexus.nexus_banking_core.dto.ApiResponse;
 import com.nexus.nexus_banking_core.dto.ChangePasswordRequest;
 import com.nexus.nexus_banking_core.dto.DeactivationRequest;
+import com.nexus.nexus_banking_core.dto.SetPinRequest;
 import com.nexus.nexus_banking_core.dto.UserLoginRequest;
 import com.nexus.nexus_banking_core.dto.UserRegisterRequest;
 import com.nexus.nexus_banking_core.dto.UserResponse;
@@ -68,6 +69,23 @@ public class UserController {
             @Valid @RequestBody ChangePasswordRequest request) {
         userService.changePassword(id, request);
         return ResponseEntity.ok(ApiResponse.success("Master password updated successfully", "Password changed successfully."));
+    }
+
+    @PostMapping("/{id}/pin")
+    public ResponseEntity<ApiResponse<String>> setOrUpdatePin(
+            @PathVariable Long id,
+            @Valid @RequestBody SetPinRequest request) {
+        userService.setOrUpdatePin(id, request);
+        return ResponseEntity.ok(ApiResponse.success("6-digit security PIN successfully configured and encrypted.", "PIN saved successfully."));
+    }
+
+    @PostMapping("/{id}/verify-pin")
+    public ResponseEntity<ApiResponse<Boolean>> verifyPin(
+            @PathVariable Long id,
+            @RequestBody java.util.Map<String, String> body) {
+        String pin = body != null ? body.get("pin") : "";
+        boolean valid = userService.verifyPin(id, pin);
+        return ResponseEntity.ok(ApiResponse.success(valid ? "PIN verified successfully" : "PIN verification failed", valid));
     }
 
     @PostMapping("/{id}/deactivation-request")

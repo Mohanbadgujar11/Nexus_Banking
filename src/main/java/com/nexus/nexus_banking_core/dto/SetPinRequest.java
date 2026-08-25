@@ -21,3 +21,4 @@ public class SetPinRequest {
 
     private String password;
 }
+

@@ -49,6 +49,8 @@ public class TransactionServiceImpl implements TransactionService {
         }
 
         Account senderAccount = accountRepository.findByAccountNumber(request.getSenderAccountNumber().trim())
+            .or(() -> userRepository.findByIdentifier(request.getSenderAccountNumber().trim())
+                .flatMap(u -> accountRepository.findPrimaryCheckingAccountByUserId(u.getId())))
             .orElseThrow(() -> new InvalidCredentialsException("Sender account '" + request.getSenderAccountNumber() + "' not found"));
 
         // 0. Validate Sender 6-Digit Security PIN
@@ -90,6 +92,18 @@ public class TransactionServiceImpl implements TransactionService {
 
         accountRepository.save(senderAccount);
         accountRepository.save(receiverAccount);
+
+        // Sync User balance fields
+        if (senderAccount.getUser() != null) {
+            User sUser = senderAccount.getUser();
+            sUser.setBalance(senderAccount.getBalance());
+            userRepository.save(sUser);
+        }
+        if (receiverAccount.getUser() != null) {
+            User rUser = receiverAccount.getUser();
+            rUser.setBalance(receiverAccount.getBalance());
+            userRepository.save(rUser);
+        }
 
         // 2. Master Transaction Record
         String ref = generateTransactionReference();
@@ -164,6 +178,13 @@ public class TransactionServiceImpl implements TransactionService {
         targetAccount.setBalance(targetAccount.getBalance().add(amount));
         targetAccount.setAvailableBalance(targetAccount.getAvailableBalance().add(amount));
         accountRepository.save(targetAccount);
+
+        // Synchronize target User balance as well
+        User targetUser = targetAccount.getUser();
+        if (targetUser != null) {
+            targetUser.setBalance(targetAccount.getBalance());
+            userRepository.save(targetUser);
+        }
 
         String ref = generateTransactionReference();
         String memo = request.getMemo() != null && !request.getMemo().isBlank()

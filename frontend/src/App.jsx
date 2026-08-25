@@ -87,17 +87,15 @@ function App() {
     }
   }, [currentUser?.accountNumber, fetchUserTransactions]);
 
-  // Sync on initial load and when user changes
+  // Sync on initial load, when user changes, and when view switches
   useEffect(() => {
     if (currentUser?.accountNumber) {
-      setBalance(parseFloat(currentUser.balance) || 0.00);
-      localStorage.setItem('nexus_current_user', JSON.stringify(currentUser));
       refreshUserData();
     } else {
       setBalance(0.00);
       setTransactions([]);
     }
-  }, [currentUser?.accountNumber, refreshUserData]);
+  }, [currentUser?.accountNumber, currentView, refreshUserData]);
 
   const handleLogout = () => {
     localStorage.removeItem('nexus_current_user');

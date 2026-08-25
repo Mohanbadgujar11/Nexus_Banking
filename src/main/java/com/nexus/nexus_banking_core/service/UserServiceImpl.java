@@ -539,6 +539,10 @@ public class UserServiceImpl implements UserService {
     }
 
     private UserResponse mapToUserResponse(User user) {
+        BigDecimal actualBalance = accountRepository.findPrimaryCheckingAccountByUserId(user.getId())
+            .map(Account::getBalance)
+            .orElse(user.getBalance() != null ? user.getBalance() : BigDecimal.ZERO);
+
         return UserResponse.builder()
             .id(user.getId())
             .accountNumber(user.getAccountNumber())
@@ -549,7 +553,7 @@ public class UserServiceImpl implements UserService {
             .dateOfBirth(user.getDateOfBirth())
             .address(user.getAddress())
             .role(user.getRole())
-            .balance(user.getBalance())
+            .balance(actualBalance)
             .hasPinSet(user.getTransactionPinHash() != null && !user.getTransactionPinHash().isBlank())
             .createdAt(user.getCreatedAt())
             .build();

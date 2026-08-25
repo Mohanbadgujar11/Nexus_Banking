@@ -708,14 +708,17 @@
   color: var(--text-muted);
 }
 
+.dash-dual-grid,
 .dashboard-grid-layout {
   display: grid;
   grid-template-columns: 1.1fr 0.9fr;
   gap: 24px;
   margin-bottom: 28px;
+  align-items: start;
 }
 
-@media (max-width: 860px) {
+@media (max-width: 900px) {
+  .dash-dual-grid,
   .dashboard-grid-layout {
     grid-template-columns: 1fr;
   }
@@ -733,22 +736,38 @@
   border-radius: 999px;
 }
 
-/* Mini Preview Metal Card */
-.preview-metal-card {
-  background: linear-gradient(135deg, #1f232e 0%, #0d0e13 100%);
-  border: 1px solid rgba(212, 175, 55, 0.4);
-  border-radius: 14px;
-  padding: 22px;
-  color: #ffffff;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.6);
+/* Mini Preview Metal Card (Sized 440px x 270px matching Cards Studio) */
+.mini-card-preview {
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  transition: transform 0.2s;
+  align-items: center;
+}
+
+.mini-card-preview .lux-card-header {
+  width: 100%;
+}
+
+.preview-metal-card {
+  background: linear-gradient(135deg, #252a37 0%, #0d0f14 100%);
+  border: 1px solid rgba(212, 175, 55, 0.5);
+  border-radius: 20px;
+  padding: 26px;
+  color: #ffffff;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.15);
+  width: 100%;
+  max-width: 440px;
+  height: 270px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  margin: 12px auto;
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.3s;
 }
 
 .mini-card-preview:hover .preview-metal-card {
-  transform: scale(1.02);
+  transform: translateY(-4px) scale(1.02);
+  box-shadow: 0 30px 60px -12px rgba(0, 0, 0, 0.9), 0 0 25px rgba(212, 175, 55, 0.25);
 }
 
 .pmc-top {
@@ -759,51 +778,63 @@
 
 .pmc-crest {
   font-family: var(--font-serif);
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.1em;
+  font-size: 16px;
+  font-weight: 800;
   color: var(--gold);
+  letter-spacing: 0.12em;
+}
+
+.pmc-wifi {
+  font-size: 15px;
+  color: rgba(255, 255, 255, 0.7);
+  letter-spacing: 2px;
 }
 
 .pmc-chip {
-  width: 38px;
-  height: 28px;
+  width: 44px;
+  height: 32px;
   border-radius: 6px;
-  background: linear-gradient(135deg, #e5be46 0%, #8a6a12 100%);
+  background: linear-gradient(135deg, #f5d77f 0%, #9e7f1f 100%);
   border: 1px solid rgba(255, 255, 255, 0.4);
 }
 
 .pmc-number {
   font-family: var(--font-mono);
-  font-size: 17px;
-  letter-spacing: 0.15em;
-  color: #f3f4f6;
+  font-size: 21px;
+  letter-spacing: 0.18em;
+  color: #ffffff;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.8);
 }
 
 .pmc-bottom {
   display: flex;
   justify-content: space-between;
   align-items: flex-end;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
-  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.15);
+  padding-top: 12px;
 }
 
 .pmc-lbl {
   font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
   color: #9ca3af;
   display: block;
 }
 
-.pmc-val {
-  font-size: 12px;
-  font-weight: 600;
+.pmc-name,
+.pmc-exp {
+  font-size: 13px;
+  font-weight: 700;
+  color: #ffffff;
 }
 
-.pmc-type {
-  font-family: var(--font-serif);
-  font-size: 13px;
-  font-weight: 800;
-  color: var(--gold);
+.mini-card-actions {
+  font-size: 12.5px;
+  color: var(--text-muted);
+  text-align: center;
+  margin-top: 10px;
+  width: 100%;
 }
 
 /* Ledger & Tables */

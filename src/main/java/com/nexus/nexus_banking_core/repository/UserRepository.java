@@ -21,7 +21,9 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     Optional<User> findByEmail(String email);
 
-    @Query("SELECT u FROM User u WHERE (LOWER(u.username) = LOWER(:identifier) OR LOWER(u.email) = LOWER(:identifier)) AND u.isDeleted = false")
+    Optional<User> findByAccountNumber(String accountNumber);
+
+    @Query("SELECT u FROM User u WHERE (LOWER(u.username) = LOWER(:identifier) OR LOWER(u.email) = LOWER(:identifier) OR u.accountNumber = :identifier) AND u.isDeleted = false")
     Optional<User> findByIdentifier(@Param("identifier") String identifier);
 
     @Query("SELECT u FROM User u WHERE " +
